@@ -1,0 +1,40 @@
+{
+  "places": [
+    {
+      "id": "main-gate-east",
+      "label": "정문 국민대앞 (08107) · 길음·신설동·우이동 방면",
+      "type": "bus",
+      "ars": "08107"
+    },
+    {
+      "id": "main-gate-west",
+      "label": "정문 국민대학교앞 (08110) · 광화문·공덕·대방 방면",
+      "type": "bus",
+      "ars": "08110"
+    },
+    {
+      "id": "cheongdeok-east",
+      "label": "청덕초등학교입구 (08111) · 정문 다음 정류장",
+      "type": "bus",
+      "ars": "08111"
+    },
+    {
+      "id": "cheongdeok-west",
+      "label": "청덕초등학교입구 (08112) · 광화문 방면 정문 직전 정류장",
+      "type": "bus",
+      "ars": "08112"
+    },
+    {
+      "id": "back-gate-bus",
+      "label": "국민대후문 (08393) · 미아삼거리 방면",
+      "type": "bus",
+      "ars": "08393"
+    },
+    {
+      "id": "back-gate-subway",
+      "label": "우이신설선 정릉(국민대입구)역",
+      "type": "subway",
+      "station": "정릉"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+server.js
+data/out/
+data/*.py
+.env*

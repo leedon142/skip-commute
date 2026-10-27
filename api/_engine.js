@@ -1,0 +1,259 @@
+// 하교 경로 추천 엔진
+// ODsay로 경로 후보를 받고, 각 구간을 서울시 실시간 도착·탑승 인원과 승하차 통계로 다시 계산한다.
+import { busStop, busStopsNear, subwayStation } from './_transit.js';
+import { findStation, searchPaths } from './_odsay.js';
+import profile from '../data/boarding_profile.json' with { type: 'json' };
+
+// 정문 국민대앞(08107) 좌표. GPS가 없을 때 출발지로 사용
+export const MAIN_GATE = { lat: 37.6106795513, lng: 126.9940273315 };
+
+const BOARD_BUFFER_SEC = 30; // 정류장 도착 후 탑승까지 여유
+const WALK_M_PER_MIN = 70; // 직선거리 기반 도보 추정 속도
+const WALK_DETOUR = 1.3; // 직선거리 → 실제 보행거리 보정
+const MAX_UPSTREAM_WALK_M = 700; // 이전 정류장으로 걸어갈 최대 직선거리
+// 일반 시내버스 기준 가정값. 실제 차량별 좌석 수는 API에서 주지 않음
+const BUS_SEATS = 25;
+const BUS_CAPACITY = 60;
+const MISS_PROB = { 여유: 0, 보통: 0.1, 혼잡: 0.4, 매우혼잡: 0.7 };
+
+// ODsay 노선 이름 → 서울 실시간 지하철 API subwayId
+const SUBWAY_IDS = { 우이신설: '1092', 경의중앙: '1063', 공항: '1065', 경춘: '1067', 수인분당: '1075', 신분당: '1077', 서해: '1093', 신림: '1094' };
+
+function subwayIdFor(lane) {
+  const code = Number(lane?.subwayCode);
+  if (code >= 1 && code <= 9) return `100${code}`;
+  const hit = Object.keys(SUBWAY_IDS).find((k) => lane?.name?.includes(k));
+  return hit ? SUBWAY_IDS[hit] : null;
+}
+
+function kstHour(date) {
+  return Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Seoul' }).format(date));
+}
+
+function weekdaysInMonth(ym) {
+  const y = Number(ym.slice(0, 4)), m = Number(ym.slice(4)) - 1;
+  let n = 0;
+  for (let d = new Date(Date.UTC(y, m, 1)); d.getUTCMonth() === m; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (d.getUTCDay() % 6 !== 0) n++;
+  }
+  return n;
+}
+const WEEKDAYS = weekdaysInMonth(profile.month);
+
+function distM(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function walkSecFromDist(m) {
+  return Math.round((m * WALK_DETOUR) / WALK_M_PER_MIN * 60);
+}
+
+// 통계 프로필에서 노선·정류장 위치 찾기
+function routeStops(busNo) {
+  const key = Object.keys(profile.routes).find((r) => busNo === r || busNo?.startsWith(r));
+  return key ? profile.routes[key] : null;
+}
+
+function stopStats(busNo, ars) {
+  const stops = routeStops(busNo);
+  if (!stops) return null;
+  const i = stops.findIndex((s) => s.ars === ars);
+  if (i < 0) return null;
+  const prev = stops[i - 1];
+  // 직전 정류장에서 거의 아무도 안 타고 다 내리면 그곳이 회차 지점 → 여기서 새로 출발
+  const startsHere = i === 0 || (prev && sum(prev.on) < sum(prev.off) * 0.05);
+  return { stops, i, stop: stops[i], prev, startsHere };
+}
+
+const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+function matchRoute(stopData, busNo) {
+  return stopData.routes.find((r) => r.route === busNo)
+    ?? stopData.routes.find((r) => r.route.startsWith(busNo) || busNo.startsWith(r.route));
+}
+
+// 내가 정류장에 도착하는 시점(atSec) 이후 첫 차
+async function busLeg(sp, atSec, now, arsOverride) {
+  const busNo = sp.lane?.[0]?.busNo;
+  const ars = arsOverride ?? sp.startArsID?.replace('-', '');
+  const leg = {
+    type: 'bus', route: busNo, from: sp.startName, to: sp.endName, ars,
+    rideMin: sp.sectionTime, stations: sp.stationCount,
+    realtime: false, waitSec: null, congestion: null, passengers: null, full: false, notes: [],
+  };
+
+  let route = null;
+  if (ars) {
+    try {
+      const stopData = await busStop(ars);
+      leg.from = stopData.name ?? leg.from;
+      route = matchRoute(stopData, busNo);
+    } catch (e) {
+      leg.notes.push(`실시간 조회 실패: ${e.message}`);
+    }
+  }
+  const headwaySec = ((route?.headwayMin || Number(sp.intervalTime)) || 10) * 60;
+
+  const catchable = route?.arrivals.find((a) => a.seconds != null && a.seconds >= atSec + BOARD_BUFFER_SEC);
+  if (catchable) {
+    leg.realtime = true;
+    leg.waitSec = catchable.seconds - atSec;
+    leg.congestion = catchable.congestion;
+    leg.passengers = catchable.passengers;
+    leg.full = catchable.full;
+  } else {
+    // 보이는 마지막 차를 놓쳤으면 그 차 + 배차간격, 운행 중인 차가 안 보이면 배차간격의 절반
+    const lastSeen = Math.max(-1, ...(route?.arrivals ?? []).map((a) => a.seconds ?? -1));
+    if (lastSeen >= 0) {
+      leg.waitSec = Math.max(lastSeen + headwaySec - atSec, BOARD_BUFFER_SEC);
+      leg.notes.push('실시간으로 보이는 차는 놓침 · 그다음 차 추정');
+    } else {
+      leg.waitSec = Math.round(headwaySec / 2);
+      const msg = route?.arrivals[0]?.message;
+      leg.notes.push(msg ? `${msg.trim()} · 배차간격으로 추정` : '실시간 정보 없음 · 배차간격으로 추정');
+    }
+  }
+
+  // 평소 이 시간대에 이 정류장에서 한 대당 타는 인원 (통계)
+  const stats = ars && stopStats(busNo, ars);
+  const hour = kstHour(new Date(now + (atSec + leg.waitSec) * 1000));
+  let boardersPerBus = null;
+  if (stats) {
+    const busesPerHour = 3600 / headwaySec;
+    boardersPerBus = Math.round(stats.stop.on[hour] / WEEKDAYS / busesPerHour);
+    leg.startsHere = stats.startsHere;
+    leg.typicalBoarders = boardersPerBus;
+  }
+
+  // 못 탈 확률 → 기대 추가 대기
+  let miss = leg.full ? 0.9 : MISS_PROB[leg.congestion] ?? 0;
+  if (leg.passengers != null && boardersPerBus != null && leg.passengers + boardersPerBus > BUS_CAPACITY) {
+    miss = Math.max(miss, 0.5);
+    leg.notes.push(`평소 이 시간 한 대당 ${boardersPerBus}명 탑승 · 만차 위험`);
+  }
+  leg.missProb = miss;
+  leg.extraWaitSec = Math.round(miss * headwaySec);
+
+  if (leg.passengers != null) {
+    const ahead = leg.startsHere ? 0 : Math.min(boardersPerBus ?? 0, BUS_SEATS);
+    leg.seatLikely = leg.passengers + ahead < BUS_SEATS;
+  } else {
+    leg.seatLikely = leg.startsHere || leg.congestion === '여유' ? true : null;
+  }
+  return leg;
+}
+
+async function subwayLeg(sp, atSec) {
+  const lane = sp.lane?.[0];
+  const leg = {
+    type: 'subway', line: lane?.name, from: sp.startName, to: sp.endName, way: sp.way,
+    rideMin: sp.sectionTime, stations: sp.stationCount,
+    realtime: false, waitSec: null, congestion: null, notes: [], missProb: 0, extraWaitSec: 0, seatLikely: null,
+  };
+  const lineId = subwayIdFor(lane);
+  const dirs = sp.wayCode === 1 ? ['상행', '내선'] : ['하행', '외선'];
+  try {
+    const st = await subwayStation(sp.startName);
+    const train = st.trains
+      .filter((t) => (!lineId || t.lineId === lineId) && dirs.includes(t.direction))
+      .filter((t) => t.seconds != null && t.seconds >= atSec + BOARD_BUFFER_SEC)
+      .sort((a, b) => a.seconds - b.seconds)[0];
+    if (train) {
+      leg.realtime = true;
+      leg.waitSec = train.seconds - atSec;
+      leg.heading = train.heading;
+    }
+  } catch (e) {
+    leg.notes.push(`실시간 조회 실패: ${e.message}`);
+  }
+  if (leg.waitSec == null) {
+    leg.waitSec = 180;
+    leg.notes.push('도착 시점 열차는 아직 실시간 범위 밖 · 3분 대기로 추정');
+  }
+  leg.notes.push('지하철 혼잡도 데이터 미연결');
+  return leg;
+}
+
+// ODsay 경로 하나를 실시간으로 다시 계산
+export async function evaluatePath(path, now, firstWalkOverride) {
+  const legs = [];
+  let t = 0;
+  for (const [idx, sp] of path.subPath.entries()) {
+    if (sp.trafficType === 3) {
+      const sec = idx === 0 && firstWalkOverride ? firstWalkOverride.sec : sp.sectionTime * 60;
+      if (sec > 0) legs.push({ type: 'walk', minutes: Math.round(sec / 60), estimated: !!firstWalkOverride && idx === 0, to: firstWalkOverride && idx === 0 ? firstWalkOverride.to : null });
+      t += sec;
+      continue;
+    }
+    const isFirstRide = !legs.some((l) => l.type !== 'walk');
+    const leg = sp.trafficType === 2
+      ? await busLeg(sp, t, now, isFirstRide ? firstWalkOverride?.ars : undefined)
+      : await subwayLeg(sp, t);
+    leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
+    t += leg.waitSec + leg.extraWaitSec + sp.sectionTime * 60;
+    leg.arriveAt = new Date(now + t * 1000).toISOString();
+    legs.push(leg);
+  }
+  return { legs, totalSec: t, arriveAt: new Date(now + t * 1000).toISOString() };
+}
+
+// 첫 버스를 한 정류장 앞에서 타는 변형 경로
+export async function upstreamVariant(path, origin, nearStops) {
+  const firstIdx = path.subPath.findIndex((sp) => sp.trafficType !== 3);
+  const sp = path.subPath[firstIdx];
+  if (sp?.trafficType !== 2) return null;
+  const stats = stopStats(sp.lane?.[0]?.busNo, sp.startArsID?.replace('-', ''));
+  if (!stats?.prev || stats.startsHere) return null;
+  const prevStop = nearStops.find((s) => s.ars === stats.prev.ars);
+  if (!prevStop) return null;
+  const d = distM(origin, prevStop);
+  if (d > MAX_UPSTREAM_WALK_M) return null;
+  return { sec: walkSecFromDist(d), ars: prevStop.ars, to: prevStop.name };
+}
+
+function signature(r) {
+  return r.legs.filter((l) => l.type !== 'walk').map((l) => `${l.type}:${l.route ?? l.line}@${l.ars ?? l.from}`).join('>');
+}
+
+export async function recommend({ origin, home, mode = 'fast', now = Date.now() }) {
+  const dest = await findStation(home);
+  const paths = (await searchPaths(origin, dest)).slice(0, 6);
+  const nearStops = await busStopsNear(origin.lat, origin.lng, MAX_UPSTREAM_WALK_M).catch(() => []);
+
+  const jobs = [];
+  for (const path of paths) {
+    jobs.push(evaluatePath(path, now).then((r) => ({ ...r, tags: [] })));
+    jobs.push(upstreamVariant(path, origin, nearStops).then((v) => v
+      && evaluatePath(path, now, v).then((r) => ({ ...r, tags: [`${v.to}까지 걸어서 먼저 타기`] }))));
+  }
+  const results = (await Promise.all(jobs)).filter(Boolean);
+
+  const seen = new Set();
+  const unique = results.filter((r) => {
+    const s = signature(r);
+    if (seen.has(s)) return false;
+    seen.add(s);
+    return true;
+  });
+
+  for (const r of unique) {
+    const first = r.legs.find((l) => l.type !== 'walk');
+    if (first?.startsHere) r.tags.push('국민대에서 출발하는 차');
+    const standingSec = r.legs
+      .filter((l) => l.type === 'bus' && l.seatLikely === false)
+      .reduce((s, l) => s + l.rideMin * 60, 0);
+    r.standingMin = Math.round(standingSec / 60);
+    // 편한 순: 서서 가는 시간 1분을 도착 0.5분 늦는 것과 같게 취급
+    r.score = r.totalSec + (mode === 'comfort' ? standingSec * 0.5 : 0);
+  }
+  unique.sort((a, b) => a.score - b.score);
+
+  return {
+    origin, destination: dest, mode,
+    generatedAt: new Date(now).toISOString(),
+    routes: unique.slice(0, 5),
+  };
+}

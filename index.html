@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스킵 (SKIP) - 캠퍼스 통학비서 AI Agent</title>
+  <!-- Tailwind CSS & Phosphor Icons CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
+    
+    * {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    /* iPhone Frame Drop Shadow */
+    .phone-shadow {
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 0 10px #1e293b, 0 0 0 13px #334155;
+    }
+
+    /* Tactile Tap Feedback */
+    .tap-press:active {
+      transform: scale(0.96);
+      transition: transform 0.1s ease;
+    }
+
+    /* Smooth App Exit Transition */
+    .app-exit-animation {
+      transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease-out, border-radius 0.24s ease !important;
+      transform: translateY(-110px) scale(0.68) !important;
+      opacity: 0 !important;
+      border-radius: 44px !important;
+      pointer-events: none !important;
+    }
+
+    /* Home Indicator Styling */
+    .home-bar-pill {
+      width: 138px;
+      height: 5px;
+      border-radius: 100px;
+      transition: width 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-start p-3 sm:p-6 overflow-x-hidden">
+
+  <!-- ================= TOP SIMULATION CONTROL TOOLBAR ================= -->
+  <header class="w-full max-w-lg mb-4 flex flex-col items-center gap-2 z-50">
+    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[11px] font-semibold">
+      <span>⚡</span>
+      <span>스킵 (SKIP) 캠퍼스 능동형 통학비서</span>
+    </div>
+    
+    <div class="flex flex-wrap items-center justify-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl shadow-xl backdrop-blur-md">
+      <button onclick="showLockScreen()" id="btn-ctrl-lock" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
+        <i class="ph-bold ph-lock-simple text-amber-400"></i>
+        <span>🔒 잠금화면</span>
+      </button>
+      <button onclick="showIosHomeScreen()" id="btn-ctrl-home" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
+        <i class="ph-bold ph-device-mobile text-emerald-400"></i>
+        <span>📱 아이폰 홈</span>
+      </button>
+      <button onclick="showSkipAppDirect()" id="btn-ctrl-app" class="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white flex items-center gap-1 shadow-md shadow-blue-600/30 tap-press transition-all">
+        <i class="ph-bold ph-lightning text-amber-300"></i>
+        <span>⚡ SKIP 앱</span>
+      </button>
+      <button onclick="triggerSimulatedPush()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
+        <i class="ph-bold ph-bell-ringing text-rose-400"></i>
+        <span>🔔 실시간 푸시</span>
+      </button>
+      <button onclick="openUnivModal()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
+        <i class="ph-bold ph-buildings text-cyan-400"></i>
+        <span>🏛️ 학교 변경</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= IPHONE 15 PRO STYLE CONTAINER ================= -->
+  <main class="relative w-[385px] h-[812px] bg-black rounded-[52px] phone-shadow overflow-hidden flex flex-col border-[4px] border-slate-800 shrink-0">
+    
+    <!-- Dynamic Island Pill -->
+    <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-50 flex items-center justify-between px-3 border border-slate-800/60 pointer-events-none">
+      <div class="w-2.5 h-2.5 rounded-full bg-slate-900 flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+      </div>
+      <span class="text-[9px] font-mono text-cyan-400 font-bold tracking-tight">SKIP</span>
+      <div class="w-2.5 h-2.5 rounded-full bg-slate-900"></div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="phone-status-bar" class="relative w-full h-11 px-7 flex items-end justify-between pb-1.5 z-40 text-white font-semibold text-[13px] tracking-tight transition-colors duration-200">
+      <span id="phone-time">17:45</span>
+      <div id="status-icons" class="flex items-center gap-1.5 text-xs">
+        <i class="ph-bold ph-cellular-signal-full"></i>
+        <i class="ph-bold ph-wifi-high"></i>
+        <i class="ph-bold ph-battery-charging text-emerald-400"></i>
+      </div>
+    </div>
+
+    <!-- ================= FLOATING PUSH NOTIFICATION (iOS BANNER) ================= -->
+    <div id="push-notification-banner" class="absolute top-12 left-3 right-3 z-50 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-200/80 transform -translate-y-64 transition-all duration-300 ease-out hidden">
+      <div class="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+        <div class="flex items-center gap-1.5">
+          <div class="w-4 h-4 rounded-md bg-blue-600 text-white flex items-center justify-center text-[9px] font-black">⚡</div>
+          <span class="font-bold text-slate-800">스킵 통학비서</span>
+          <span class="text-slate-400">· 방금 전</span>
+        </div>
+        <button onclick="dismissPush()" class="text-slate-400 hover:text-slate-600 p-0.5">
+          <i class="ph-bold ph-x text-xs"></i>
+        </button>
+      </div>
+      <div class="flex gap-2.5 items-start mt-1 cursor-pointer" onclick="clickPushNotification()">
+        <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+          <i class="ph-bold ph-navigation-arrow text-base"></i>
+        </div>
+        <div class="flex-1">
+          <div class="text-xs font-bold text-slate-900">🌧️ 17:45 수업 종료: 정문 정체로 우회 추천</div>
+          <p class="text-[11px] text-slate-600 leading-snug mt-0.5">
+            정문 버스 대기열 70m 초과! <b>정문 셔틀(18:05)</b> 또는 <b>후문 우이신설선</b> 이용 시 12분 이상 단축됩니다.
+          </p>
+        </div>
+      </div>
+      <button onclick="clickPushNotification()" class="mt-2.5 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 shadow-sm tap-press">
+        <span>추천 경로 및 3가지 대안 확인</span>
+        <i class="ph-bold ph-arrow-right"></i>
+      </button>
+    </div>
+
+    <!-- ================= CONTAINER BODY FOR 3 OS SCREENS ================= -->
+    <div class="relative flex-1 w-full overflow-hidden flex flex-col">
+
+      <!-- ============================================================= -->
+      <!-- 1. SCREEN A: iOS LOCK SCREEN                                 -->
+      <!-- ============================================================= -->
+      <section id="view-lockscreen" class="absolute inset-0 z-30 flex flex-col justify-between p-6 text-white" style="background: linear-gradient(180deg, #090d16 0%, #111827 50%, #030712 100%);">
+        
+        <!-- Top Clock & Date Area -->
+        <div class="text-center mt-6">
+          <div class="text-sm text-slate-400 font-medium">9월 24일 화요일</div>
+          <div class="text-6xl font-light tracking-tight mt-1 font-mono">17:45</div>
+          <div class="mt-3 inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-xs text-slate-200 border border-white/10">
+            <i class="ph-bold ph-cloud-rain text-cyan-300"></i>
+            <span>북악산 일대 가을비 · 19°C</span>
+          </div>
+        </div>
+
+        <!-- Lockscreen Push Card Preview -->
+        <div id="lockscreen-card" class="w-full bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-2xl p-4 shadow-2xl">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span class="flex items-center gap-1.5 font-bold text-white">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+              <span>스킵 실시간 하교 길안내</span>
+            </span>
+            <span class="text-[10px]">지금</span>
+          </div>
+          <div class="text-xs font-bold text-white mt-1">공학관 강의 종료 ➔ 귀가 추천 경로</div>
+          <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            정문 정류소 정체 지연 감지. <b>정문 셔틀(18:05)</b> 또는 <b>후문 우이신설선 도보</b> 이용 시 도로 정체를 완벽 회피합니다.
+          </p>
+          <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
+            <i class="ph-bold ph-door-open"></i>
+            <span>앱 열고 상세 3가지 경로 확인</span>
+          </button>
+        </div>
+
+        <!-- Bottom Controls & Swipe Area -->
+        <div class="w-full flex flex-col items-center gap-3">
+          <div class="w-full flex items-center justify-between px-2">
+            <div class="w-11 h-11 rounded-full bg-slate-800/80 backdrop-blur-md border border-slate-700/60 flex items-center justify-center text-slate-300 shadow">
+              <i class="ph-bold ph-flashlight text-lg"></i>
+            </div>
+            <button onclick="unlockToHomeScreen()" class="text-xs text-slate-400 hover:text-white flex flex-col items-center gap-0.5 tap-press cursor-pointer">
+              <i class="ph-bold ph-caret-up animate-bounce text-sm"></i>
+              <span class="text-[11px]">화면을 위로 올려 잠금 해제</span>
+            </button>
+            <div class="w-11 h-11 rounded-full bg-slate-800/80 backdrop-blur-md border border-slate-700/60 flex items-center justify-center text-slate-300 shadow">
+              <i class="ph-bold ph-camera text-lg"></i>
+            </div>
+          </div>
+          
+          <!-- Lock Screen Interactive Home Bar -->
+          <div id="lockscreen-home-indicator" class="w-full py-3.5 flex items-center justify-center cursor-pointer select-none touch-none">
+            <div class="home-bar-pill bg-white/80 shadow pointer-events-none"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- 2. SCREEN B: iOS SPRINGBOARD (IPHONE HOME SCREEN)            -->
+      <!-- ============================================================= -->
+      <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);">
+        
+        <!-- Springboard Top Grid & Widgets -->
+        <div class="space-y-4 pt-4">
+          <!-- Calendar / Weather Twin Widget -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-3.5 flex flex-col justify-between h-28 shadow-lg">
+              <div class="text-[11px] font-bold text-rose-400">화요일</div>
+              <div class="text-3xl font-black">24</div>
+              <div class="text-[10px] text-slate-300">오늘 일정: 17:45 하교</div>
+            </div>
+            <div class="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-3.5 flex flex-col justify-between h-28 shadow-lg">
+              <div class="flex items-center justify-between text-[11px] text-cyan-300 font-bold">
+                <span>서울 성북구</span>
+                <i class="ph-bold ph-cloud-rain"></i>
+              </div>
+              <div class="text-3xl font-extrabold">19°</div>
+              <div class="text-[10px] text-slate-300">비 · 정릉로 정체 심화</div>
+            </div>
+          </div>
+
+          <!-- Springboard App Grid (Including SKIP) -->
+          <div class="grid grid-cols-4 gap-y-4 gap-x-2 pt-1">
+            
+            <!-- PROMINENT '⚡ SKIP' APP ICON -->
+            <button onclick="openSkipApp()" class="flex flex-col items-center gap-1 group tap-press">
+              <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
+                <i class="ph-fill ph-lightning text-3xl text-amber-300"></i>
+                <!-- Red Notification Badge -->
+                <span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-slate-900 shadow">1</span>
+              </div>
+              <span class="text-[11px] font-semibold text-white drop-shadow">스킵 (SKIP)</span>
+            </button>
+
+            <!-- Safari -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center text-white shadow-md">
+                <i class="ph-bold ph-compass text-2xl"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">Safari</span>
+            </div>
+
+            <!-- Photos -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-rose-500 shadow-md">
+                <i class="ph-fill ph-flower-lotus text-3xl text-amber-500"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">사진</span>
+            </div>
+
+            <!-- Notes -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-amber-200 to-yellow-400 flex items-center justify-center text-amber-900 shadow-md">
+                <i class="ph-bold ph-note-pencil text-2xl"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">메모</span>
+            </div>
+
+            <!-- Maps -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white shadow-md">
+                <i class="ph-bold ph-map-trifold text-2xl"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">지도</span>
+            </div>
+
+            <!-- KakaoTalk placeholder -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-yellow-400 flex items-center justify-center text-amber-950 shadow-md font-black text-sm">
+                TALK
+              </div>
+              <span class="text-[11px] text-slate-300">카카오톡</span>
+            </div>
+
+            <!-- Instagram -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                <i class="ph-bold ph-instagram-logo text-2xl"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">Instagram</span>
+            </div>
+
+            <!-- Settings -->
+            <div class="flex flex-col items-center gap-1 opacity-90">
+              <div class="w-14 h-14 rounded-2xl bg-slate-600 flex items-center justify-center text-slate-200 shadow-md">
+                <i class="ph-bold ph-gear text-2xl"></i>
+              </div>
+              <span class="text-[11px] text-slate-300">설정</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Springboard Bottom Dock -->
+        <div class="space-y-3 pb-1">
+          <div class="w-full bg-white/20 backdrop-blur-2xl border border-white/20 rounded-[30px] p-2.5 px-4 flex items-center justify-between shadow-2xl">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shadow-md">
+              <i class="ph-bold ph-phone-call text-2xl"></i>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
+              <i class="ph-bold ph-chat-circle-dots text-2xl"></i>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center text-white shadow-md">
+              <i class="ph-bold ph-envelope-simple text-2xl"></i>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-rose-500 flex items-center justify-center text-white shadow-md">
+              <i class="ph-bold ph-music-notes text-2xl"></i>
+            </div>
+          </div>
+
+          <!-- Springboard Indicator -->
+          <div class="w-full pt-1 pb-1 flex items-center justify-center">
+            <div class="home-bar-pill bg-white/80"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- 3. SCREEN C: FULL 'SKIP' APP (5 TABS NAVIGATION)              -->
+      <!-- ============================================================= -->
+      <section id="view-app" class="absolute inset-0 z-10 flex flex-col bg-slate-100 text-slate-900 hidden overflow-hidden will-change-transform">
+        
+        <!-- App Top Bar (Logo + School Badge + School Switcher) -->
+        <div class="bg-white border-b border-slate-200/90 px-3.5 py-2.5 flex items-center justify-between shrink-0 shadow-sm z-20">
+          <!-- Left: SKIP Brand Logo + Selected School Badge -->
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 font-black text-sm text-blue-600">
+              <span class="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-sm">⚡</span>
+              <span class="text-slate-900 font-extrabold text-[15px] tracking-tight">SKIP</span>
+            </div>
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <!-- School Pill Chip -->
+            <button onclick="openUnivModal()" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 text-[11px] font-bold tap-press transition-colors">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+              <span id="appbar-univ-name">국민대학교</span>
+            </button>
+          </div>
+
+          <!-- Right: Bell & School Selector Modal Button -->
+          <div class="flex items-center gap-1">
+            <button onclick="triggerSimulatedPush()" title="푸시 알림 테스트" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs tap-press">
+              <i class="ph-bold ph-bell"></i>
+            </button>
+            <button onclick="openUnivModal()" class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs flex items-center gap-1 font-bold border border-blue-200/80 tap-press">
+              <i class="ph-bold ph-buildings text-blue-600"></i>
+              <span>학교변경</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrollable Tab Content Container -->
+        <div id="app-scroll-content" class="flex-1 overflow-y-auto p-3.5 space-y-3 pb-6">
+          
+          <!-- ================= TAB 1: HOME (홈) ================= -->
+          <div id="tab-pane-1" class="space-y-3">
+            
+            <!-- Proactive Dismissal AI Briefing Hero Card -->
+            <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-blue-900 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+              <div class="flex items-center justify-between text-xs mb-2">
+                <span class="bg-blue-500/30 text-cyan-200 border border-cyan-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <i class="ph-bold ph-sparkle text-amber-300"></i> AI 능동 하교 브리핑
+                </span>
+                <span class="text-blue-200 text-[11px] font-mono">17:45 종료 연동</span>
+              </div>
+              <h2 class="text-base font-extrabold leading-snug">
+                정문 시내버스 만차 지연!<br>
+                <span class="text-cyan-300">정문 셔틀</span> 또는 <span class="text-amber-300">후문 우이신설선</span> 추천
+              </h2>
+              <p class="text-xs text-blue-100 mt-1 leading-relaxed">
+                가을비로 정릉로 서행 중입니다. 정문 171/7211번 대기열 70명 초과. 본부관이 아닌 <b class="text-white">정문 셔틀(18:05)</b> 또는 <b class="text-white">후문 도보 ➔ 북한산보국문역</b> 우회 시 12분 이상 단축됩니다.
+              </p>
+
+              <!-- Destination & Travel Time Grid -->
+              <div class="mt-3 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div class="text-[10px] text-blue-200">등록 목적지 (하차 거점)</div>
+                  <div id="home-card-dest" class="font-bold truncate mt-0.5">화곡역 6번 출구 (강서구)</div>
+                </div>
+                <div class="border-l border-white/20 pl-2.5">
+                  <div class="text-[10px] text-blue-200">셔틀 이용 시 도착</div>
+                  <div class="font-extrabold text-amber-300 mt-0.5">52분 (18:57 착석)</div>
+                </div>
+              </div>
+
+              <!-- Action Button to Commute Tab -->
+              <button onclick="goToDismissalCommuteTab()" class="mt-3.5 w-full py-2.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md tap-press">
+                <span>3가지 실시간 대안 경로 비교하기</span>
+                <i class="ph-bold ph-arrow-right"></i>
+              </button>
+            </div>
+
+            <!-- Real-Time Bottleneck Quick Cards -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  캠퍼스 주요 출구 실시간 현황
+                </span>
+                <span class="text-[10px] text-slate-400">1분 전 갱신</span>
+              </div>
+
+              <!-- Shuttle -->
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                <div>
+                  <div class="font-bold text-slate-800 flex items-center gap-1">
+                    <span class="text-blue-600 font-extrabold">🚐 정문 교내 셔틀</span>
+                    <span class="text-[10px] text-slate-400 font-normal">길음역 방면</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">다음 18:05 출발 · 잔여 18석 (여유)</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">탑승 강력추천</span>
+              </div>
+
+              <!-- Rear Gate Walk + LRT -->
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                <div>
+                  <div class="font-bold text-slate-800 flex items-center gap-1">
+                    <span class="text-amber-600 font-extrabold">🚶 후문 도보 ➔ 우이신설선</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">북한산보국문역 도보 7분 · 도로 정체 0%</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold text-[10px]">정체 회피 특화</span>
+              </div>
+
+              <!-- City Bus -->
+              <div class="p-2.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between text-xs">
+                <div>
+                  <div class="font-bold text-rose-900 flex items-center gap-1">
+                    <span>🚍 정문 시내버스 (171/7211)</span>
+                  </div>
+                  <div class="text-[11px] text-rose-700 mt-0.5">정문 대기열 70명 이상 · 연속 만차 진입</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 font-bold text-[10px]">대기 극심 (비추천)</span>
+              </div>
+            </div>
+
+            <!-- Instant On-Demand Dismissal Button -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between text-xs">
+              <div>
+                <div class="font-bold text-slate-800">수업이 일찍 끝나셨나요?</div>
+                <div class="text-[11px] text-slate-500">기다리지 않고 지금 즉시 최적 경로를 브리핑합니다.</div>
+              </div>
+              <button onclick="triggerSimulatedPush()" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shrink-0 tap-press flex items-center gap-1 text-[11px]">
+                <i class="ph-bold ph-lightning text-amber-300"></i>
+                <span>즉시 호출</span>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- ================= TAB 2: TIMETABLE (시간표) ================= -->
+          <div id="tab-pane-2" class="space-y-3 hidden">
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-bold text-slate-800">2026학년도 2학기 시간표</h3>
+                <span class="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <i class="ph-bold ph-shield-check"></i> On-Device 암호화
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500 mb-3">
+                수업 종료 시점 및 강의동 위치를 기준으로 하교 알림이 자동 동기화됩니다.
+              </p>
+
+              <!-- Classes List -->
+              <div class="space-y-2">
+                <div onclick="inspectClassTrigger('일반물리학및실험 II', '북악관 302호', '11:45')" class="p-3 rounded-xl bg-blue-50/60 border border-blue-100 cursor-pointer tap-press">
+                  <div class="flex items-center justify-between text-[11px] text-blue-800 font-bold">
+                    <span>화요일 1~2교시 (09:00 - 11:45)</span>
+                    <span class="bg-blue-100 text-blue-900 px-2 py-0.5 rounded-full">북악관 302호</span>
+                  </div>
+                  <div class="font-bold text-xs text-slate-900 mt-1">일반물리학및실험 II</div>
+                  <div class="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                    <i class="ph-bold ph-clock"></i> 아침 07:15 스마트 가변 알람 연동됨 (+15분 조기 알람)
+                  </div>
+                </div>
+
+                <div onclick="inspectClassTrigger('정역학 및 모빌리티 설계', '공학관 204호', '17:45')" class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 cursor-pointer tap-press">
+                  <div class="flex items-center justify-between text-[11px] text-emerald-800 font-bold">
+                    <span>화요일 4~5교시 (15:00 - 17:45)</span>
+                    <span class="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full">공학관 204호</span>
+                  </div>
+                  <div class="font-bold text-xs text-slate-900 mt-1">정역학 및 모빌리티 설계</div>
+                  <div class="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
+                    <i class="ph-bold ph-bell-ringing"></i> 17:45 수업 종료 즉시 하교 브리핑 푸시 트리거
+                  </div>
+                </div>
+              </div>
+
+              <!-- Trigger Inspect Box -->
+              <div id="class-inspect-box" class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <div class="font-bold text-slate-700 mb-0.5">💡 과목을 터치하여 통학 트리거 설정을 확인하세요</div>
+                <div class="text-[11px] text-slate-500">시간표와 강의동 정보는 외부 서버에 전송되지 않고 스마트폰 기기 내부(Local)에만 저장됩니다.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= TAB 3: COMMUTE AGENT (실시간 통학) ================= -->
+          <div id="tab-pane-3" class="space-y-3 hidden">
+            
+            <!-- Mode Toggle: Morning Mode (LEFT) vs Dismissal Mode (RIGHT) -->
+            <div class="grid grid-cols-2 p-1 bg-slate-200/80 rounded-xl text-xs font-bold">
+              <button onclick="switchCommuteSubMode('morning')" id="btn-sub-morning" class="py-1.5 rounded-lg text-slate-600 transition-all tap-press">
+                등교 모드 (가변 알람/환승)
+              </button>
+              <button onclick="switchCommuteSubMode('dismissal')" id="btn-sub-dismissal" class="py-1.5 rounded-lg bg-white text-blue-700 shadow-sm transition-all tap-press">
+                하교 모드 (정문 정체 회피)
+              </button>
+            </div>
+
+            <!-- ---------------- SUBMODE: DISMISSAL (하교 3가지 대안) ---------------- -->
+            <div id="submode-dismissal" class="space-y-3">
+
+              <!-- 지금 하교 → 실시간 경로 추천 (/api/recommend) -->
+              <div class="bg-white rounded-2xl border-2 border-blue-600 shadow-md overflow-hidden">
+                <div class="px-3.5 pt-3 pb-2.5 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
+                    <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
+                      <button id="rec-mode-fast" onclick="setRecMode('fast')" class="px-2 py-0.5 rounded-md bg-white text-blue-700 shadow-sm">빠른 순</button>
+                      <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="px-2 py-0.5 rounded-md text-slate-500">편한 순</button>
+                    </div>
+                  </div>
+                  <button onclick="runRecommend()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
+                    내 위치로 최적 경로 찾기
+                  </button>
+                  <div id="rec-meta" class="text-[10px] text-slate-500"></div>
+                </div>
+                <div id="rec-results" class="divide-y divide-slate-100 text-xs"></div>
+              </div>
+
+              <!-- 실시간 출발 현황 (서울시 버스·지하철 API) -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100">
+                  <span class="text-xs font-extrabold text-slate-900">실시간 출발 현황</span>
+                  <button onclick="loadLiveBoard()" class="text-[11px] font-bold text-blue-600 hover:text-blue-500 tap-press">
+                    <span id="live-board-updated">불러오는 중</span> · 새로고침
+                  </button>
+                </div>
+                <div id="live-board" class="divide-y divide-slate-100 text-xs"></div>
+              </div>
+
+              <!-- Route 1: 정문 교내 셔틀버스 -->
+              <div class="bg-white rounded-2xl p-4 border-2 border-blue-600 shadow-md relative">
+                <div class="absolute -top-2.5 right-4 bg-blue-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow">
+                  강력 추천 1순위
+                </div>
+                <div class="flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-1">
+                  <span>대안 1</span>
+                  <span>·</span>
+                  <span class="text-slate-900 font-extrabold text-sm">정문 교내 셔틀버스</span>
+                </div>
+                <div class="text-[11px] text-slate-500 mb-2">
+                  정문 셔틀 ➔ 길음역(4호선) ➔ DDP(5호선 환승) ➔ 화곡역
+                </div>
+                <div class="bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 text-xs space-y-1">
+                  <div class="flex justify-between font-bold text-slate-800">
+                    <span>18:05 정문 출발 예정</span>
+                    <span class="text-blue-700">45인승 중 잔여 18석</span>
+                  </div>
+                  <div class="text-[11px] text-slate-600">
+                    정문 정류소의 시내버스 줄을 우회하여 길음역까지 논스톱 쾌적 이동 (착석 확률 95%).
+                  </div>
+                </div>
+                <div class="mt-2.5 flex items-center justify-between text-xs font-bold">
+                  <span class="text-slate-600">예상 소요: <b class="text-blue-700 text-sm">52분</b></span>
+                  <button onclick="triggerToast('정문 셔틀 탑승 예약 큐에 반영되었습니다.')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold tap-press">
+                    셔틀 경로로 이동
+                  </button>
+                </div>
+              </div>
+
+              <!-- Route 2: 후문 도보 ➔ 북한산보국문역 (우이신설선) -->
+              <div class="bg-white rounded-2xl p-4 border border-amber-300 shadow-sm relative">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-amber-600 mb-1">
+                  <span>대안 2</span>
+                  <span>·</span>
+                  <span class="text-slate-900 font-extrabold text-sm">후문 도보 ➔ 북한산보국문역 (우이신설선)</span>
+                </div>
+                <div class="text-[11px] text-slate-500 mb-2">
+                  후문 도보 7분 ➔ 우이신설선 ➔ 보문역(6호선) ➔ 청구(5호선) ➔ 화곡역
+                </div>
+                <div class="bg-amber-50/70 border border-amber-100 rounded-xl p-2.5 text-xs space-y-1">
+                  <div class="flex justify-between font-bold text-amber-950">
+                    <span>정릉로 도로 정체 0% 완전 우회</span>
+                    <span class="text-emerald-700">정시성 100% 보장</span>
+                  </div>
+                  <div class="text-[11px] text-slate-600">
+                    비가 와도 도로 정체 영향을 전혀 받지 않는 쾌적한 도보 + 경전철 우회 코스입니다.
+                  </div>
+                </div>
+                <div class="mt-2.5 flex items-center justify-between text-xs font-bold">
+                  <span class="text-slate-600">예상 소요: <b class="text-amber-700 text-sm">56분</b></span>
+                  <button onclick="triggerToast('후문 우이신설선 도보 경로 안내를 시작합니다.')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold tap-press">
+                    후문 도보 안내
+                  </button>
+                </div>
+              </div>
+
+              <!-- Route 3: 정문 시내버스 171/7211번 (비추천) -->
+              <div class="bg-white/90 rounded-2xl p-4 border border-rose-200 opacity-90 shadow-sm">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-rose-600 mb-1">
+                  <span>대안 3 (비추천)</span>
+                  <span>·</span>
+                  <span class="text-slate-700 font-bold text-sm">정문 시내버스 171 / 7211번</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mb-2">
+                  정문 정류소 ➔ 길음역 ➔ 4호선 환승
+                </div>
+                <div class="bg-rose-50 border border-rose-100 rounded-xl p-2.5 text-xs text-rose-900 leading-snug">
+                  ⚠️ <b>탑승 지연 경고:</b> 현재 정문 대기열 70명 이상 누적. 다가오는 버스 2대 만차 진입 예상 (+18분 이상 추가 지체).
+                </div>
+                <div class="mt-2 text-right text-xs font-bold text-rose-600">
+                  예상 소요: 70분 이상 (지연 위험)
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ---------------- SUBMODE: MORNING (등교 스마트 가변 알람 & 3대 등교 대안) ---------------- -->
+            <div id="submode-morning" class="space-y-3 hidden">
+              
+              <!-- Variable Alarm Preview -->
+              <div class="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-4 text-white shadow-md">
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold">
+                    ⏰ 스마트 가변 알람 작동
+                  </span>
+                  <span class="text-amber-300 font-extrabold">+15분 조기 기상</span>
+                </div>
+                <div class="text-lg font-black">
+                  평소 07:30 ➔ 오늘 <span class="text-cyan-300">07:15</span> 울림
+                </div>
+                <p class="text-xs text-indigo-100 mt-1 leading-relaxed">
+                  사유: 아침 비 및 북악터널 진입로 출근길 정체 심화 감지. 1교시 북악관 9시 착석을 위해 15분 일찍 알람을 울렸습니다.
+                </p>
+              </div>
+
+              <!-- Gireum Station Transfer Decision -->
+              <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2">
+                <div class="font-bold text-xs text-slate-800 flex items-center justify-between">
+                  <span>길음역 하차 직전 환승 판단 브리핑</span>
+                  <span class="text-[10px] text-blue-600 font-semibold">지하철 1정거장 전</span>
+                </div>
+                <p class="text-[11px] text-slate-600">
+                  현재 길음역 셔틀 대기 줄이 길어 1대 대기 후 탑승 예상됩니다. <b>3번 출구 시내버스(7211)</b> 이용 시 강의동 착석까지 8분 더 빠릅니다.
+                </p>
+                <div class="grid grid-cols-2 gap-2 pt-1 text-xs">
+                  <div class="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="font-bold text-slate-700">길음 셔틀</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">대기 1대 예상</div>
+                    <div class="font-bold text-rose-600 text-[11px] mt-1">도착 08:58</div>
+                  </div>
+                  <div class="p-2 rounded-xl bg-blue-50 border border-blue-200">
+                    <div class="font-bold text-blue-800">시내버스 7211</div>
+                    <div class="text-[11px] text-blue-600 mt-0.5">2분 뒤 도착 (보통)</div>
+                    <div class="font-bold text-blue-700 text-[11px] mt-1">도착 08:50 (추천)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detailed Morning Commute Routes: 화곡역 ➔ 국민대 북악관 -->
+              <div class="space-y-2.5 pt-1">
+                <div class="flex items-center justify-between text-xs px-1">
+                  <span class="font-bold text-slate-800">내 주소(화곡역) ➔ 1교시 강의동(북악관) 등교 대안</span>
+                  <span class="text-[10px] text-slate-400">09:00 착석 기준</span>
+                </div>
+
+                <!-- Morning Route 1: 지하철 급행 + 길음역 교내 셔틀 -->
+                <div class="bg-white rounded-2xl p-3.5 border-2 border-blue-500 shadow-sm relative">
+                  <div class="absolute -top-2.5 right-3 bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow">
+                    등교 추천 1순위
+                  </div>
+                  <div class="flex items-center gap-1.5 text-xs font-bold text-blue-600 mb-1">
+                    <span>등교 대안 1</span>
+                    <span>·</span>
+                    <span class="text-slate-900 font-extrabold text-sm">지하철 급행 + 길음역 교내 셔틀</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mb-2">
+                    화곡역(5호선) ➔ DDP 환승(4호선 급행) ➔ 길음역 하차 ➔ 정문 셔틀 탑승
+                  </div>
+                  <div class="bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 text-xs space-y-1">
+                    <div class="flex justify-between font-bold text-slate-800">
+                      <span>07:55 화곡역 출발 권장</span>
+                      <span class="text-blue-700">소요 시간: 약 54분</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600">
+                      셔틀버스 착석률 높고 정문 하차 후 북악관 도보 3분 진입 가능 (08:51 강의실 도착 예상).
+                    </div>
+                  </div>
+                  <div class="mt-2.5 flex items-center justify-between text-xs font-bold">
+                    <span class="text-slate-600">도착 예상: <b class="text-blue-700 text-sm">08:51 (여유)</b></span>
+                    <button onclick="triggerToast('등교 대안 1 (셔틀 연계) 안내를 시작합니다.')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold tap-press">
+                      이 경로로 등교
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Morning Route 2: 지하철 + 시내버스 7211번 -->
+                <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm relative">
+                  <div class="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-1">
+                    <span>등교 대안 2</span>
+                    <span>·</span>
+                    <span class="text-slate-900 font-extrabold text-sm">지하철 + 시내버스 (7211번)</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mb-2">
+                    화곡역(5호선) ➔ 길음역 3번출구 ➔ 7211번 버스 탑승 ➔ 국민대앞 정문 하차
+                  </div>
+                  <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs space-y-1">
+                    <div class="flex justify-between font-bold text-slate-800">
+                      <span>07:50 화곡역 출발 권장</span>
+                      <span class="text-slate-700">소요 시간: 약 58분</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600">
+                      배차 간격 4~6분으로 셔틀 대기가 길 때 환승 대안으로 적합 (정릉로 출근 서행 주의).
+                    </div>
+                  </div>
+                  <div class="mt-2.5 flex items-center justify-between text-xs font-bold">
+                    <span class="text-slate-600">도착 예상: <b class="text-slate-800 text-sm">08:50</b></span>
+                    <button onclick="triggerToast('등교 대안 2 (시내버스) 안내를 시작합니다.')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold tap-press">
+                      버스 연계 등교
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Morning Route 3: 우이신설선 북한산보국문역 + 후문 도보 -->
+                <div class="bg-white rounded-2xl p-3.5 border border-amber-300 shadow-sm relative">
+                  <div class="flex items-center gap-1.5 text-xs font-bold text-amber-600 mb-1">
+                    <span>등교 대안 3</span>
+                    <span>·</span>
+                    <span class="text-slate-900 font-extrabold text-sm">우이신설선 + 후문 도보 (정체 0%)</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 mb-2">
+                    화곡역(5호선) ➔ 신설동역 환승 ➔ 우이신설선 북한산보국문역 ➔ 후문 도보 7분
+                  </div>
+                  <div class="bg-amber-50/70 border border-amber-100 rounded-xl p-2.5 text-xs space-y-1">
+                    <div class="flex justify-between font-bold text-amber-950">
+                      <span>07:45 화곡역 출발 권장</span>
+                      <span class="text-amber-700">소요 시간: 약 62분</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600">
+                      정릉로와 북악터널 출근길 정체를 100% 회피하는 지상 버스 없는 철도 중심 정시 루트.
+                    </div>
+                  </div>
+                  <div class="mt-2.5 flex items-center justify-between text-xs font-bold">
+                    <span class="text-slate-600">도착 예상: <b class="text-amber-700 text-sm">08:47 (정시 보장)</b></span>
+                    <button onclick="triggerToast('등교 대안 3 (후문 도보) 안내를 시작합니다.')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold tap-press">
+                      우이신설선 등교
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- ================= TAB 4: QUEUE REPORTS (정류장 제보) ================= -->
+          <div id="tab-pane-4" class="space-y-3 hidden">
+            
+            <!-- One-Touch Quick Report Box -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
+              <div class="font-bold text-xs text-slate-800 mb-1">📢 실시간 정류장 원터치 제보</div>
+              <p class="text-[11px] text-slate-500 mb-3">
+                지금 정류장 대기 상황을 눌러 학우들의 경로 판단을 도와주세요!
+              </p>
+              <div class="grid grid-cols-3 gap-2 text-xs">
+                <button onclick="submitReport('여유 (바로 탑승 가능)')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                  <span class="text-sm">🟢</span>
+                  <span>여유</span>
+                </button>
+                <button onclick="submitReport('보통 (1대 대기 후 탑승)')" class="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                  <span class="text-sm">🟡</span>
+                  <span>보통</span>
+                </button>
+                <button onclick="submitReport('혼잡 (만차 / 줄 매우 긺)')" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                  <span class="text-sm">🔴</span>
+                  <span>혼잡</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Feed List -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-800">학우들의 실시간 현장 피드</span>
+                <span class="text-[10px] text-slate-400">실시간 연동 중</span>
+              </div>
+
+              <div id="report-feed-list" class="space-y-2">
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                  <div class="flex items-center justify-between font-bold text-slate-800">
+                    <span class="flex items-center gap-1 text-rose-600">
+                      <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 정문 시내버스 171
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-normal">2분 전</span>
+                  </div>
+                  <p class="text-[11px] text-slate-600 mt-1">
+                    "171번 줄 북악관 계단 근처까지 서 있습니다. 버스 탈 생각 마시고 셔틀 타세요"
+                  </p>
+                </div>
+
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                  <div class="flex items-center justify-between font-bold text-slate-800">
+                    <span class="flex items-center gap-1 text-emerald-600">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 정문 셔틀 승차장
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-normal">5분 전</span>
+                  </div>
+                  <p class="text-[11px] text-slate-600 mt-1">
+                    "셔틀 줄 생각보다 빨리 줄어듭니다. 5분 기다리니 바로 탔어요!"
+                  </p>
+                </div>
+
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                  <div class="flex items-center justify-between font-bold text-slate-800">
+                    <span class="flex items-center gap-1 text-amber-600">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> 후문 우이신설길
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-normal">8분 전</span>
+                  </div>
+                  <p class="text-[11px] text-slate-600 mt-1">
+                    "비 오는데 북한산보국문역 길 사람 별로 없고 아주 쾌적합니다 추천"
+                  </p>
+                </div>
+
+                <!-- Hidden Extra Feeds -->
+                <div id="extra-feed-container" class="space-y-2 hidden">
+                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                    <div class="flex items-center justify-between font-bold text-slate-800">
+                      <span class="flex items-center gap-1 text-blue-600">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 길음역 셔틀 승차홈
+                      </span>
+                      <span class="text-[10px] text-slate-400 font-normal">아침 제보</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 mt-1">
+                      "아침 8시 40분 길음역 셔틀 줄 30명 정도 서있네요. 배차 빨라서 금방 빠집니다"
+                    </p>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                    <div class="flex items-center justify-between font-bold text-slate-800">
+                      <span class="flex items-center gap-1 text-rose-600">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 북악터널 진입로
+                      </span>
+                      <span class="text-[10px] text-slate-400 font-normal">15분 전</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 mt-1">
+                      "터널 빠져나오는 차선 완전히 주차장 상태입니다. 버스 진입 지연 중"
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Expand Feed Toggle Button -->
+              <button onclick="toggleFeedMore()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 tap-press">
+                <span id="btn-load-more-text">실시간 장소별 제보 더보기 (2건 추가)</span>
+                <i id="btn-load-more-icon" class="ph-bold ph-caret-down text-xs"></i>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- ================= TAB 5: MY PAGE (내 정보) ================= -->
+          <div id="tab-pane-5" class="space-y-3 hidden">
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-lg">
+                  K
+                </div>
+                <div>
+                  <div class="font-extrabold text-sm text-slate-900">국민대학교 학생</div>
+                  <div id="my-profile-univ" class="text-xs text-slate-500">소프트웨어학부 · 재학생</div>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-100 pt-3 space-y-2.5 text-xs">
+                <div>
+                  <div class="text-[10px] text-slate-400 font-semibold">소속 대학교</div>
+                  <div class="flex items-center justify-between mt-0.5">
+                    <span id="my-current-univ-txt" class="font-bold text-slate-800">국민대학교</span>
+                    <button onclick="openUnivModal()" class="text-blue-600 font-bold text-xs tap-press">캠퍼스 변경</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400 font-semibold">귀가 목적지 (상세 주소 대신 하차 거점역 등록)</div>
+                  <div class="flex items-center justify-between mt-0.5">
+                    <span id="my-current-dest-txt" class="font-bold text-slate-800">화곡역 6번 출구 (강서구)</span>
+                    <button onclick="openEditDestModal()" class="text-blue-600 font-bold text-xs tap-press">수정</button>
+                  </div>
+                </div>
+                <div class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 flex items-start gap-1.5">
+                  <i class="ph-bold ph-shield-check text-base text-emerald-600 shrink-0 mt-0.5"></i>
+                  <span>개인정보 보호: 상세 동/호수는 수집하지 않으며 모든 시간표 및 좌표는 스마트폰 기기 로컬에만 보관됩니다.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings Toggles -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3 text-xs">
+              <div class="font-bold text-slate-800">스마트 알림 환경설정</div>
+              <div class="flex items-center justify-between">
+                <span>기상·교통 연동 스마트 가변 알람</span>
+                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
+              </div>
+              <div class="flex items-center justify-between">
+                <span>수업 종료 시 능동 하교 브리핑 푸시</span>
+                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
+              </div>
+              <div class="flex items-center justify-between">
+                <span>이동 중 돌발 정체 시 실시간 우회 가이드</span>
+                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= 5-TAB BOTTOM NAVIGATION ================= -->
+        <nav class="bg-white border-t border-slate-200/90 px-2 pt-1 pb-1 flex items-center justify-around shrink-0 shadow-lg relative z-20">
+          <button onclick="switchTab(1)" id="nav-tab-1" class="flex flex-col items-center justify-center py-1 px-2.5 text-blue-600 tap-press">
+            <i class="ph-fill ph-house text-xl"></i>
+            <span class="text-[10px] font-bold mt-0.5">홈</span>
+          </button>
+          <button onclick="switchTab(2)" id="nav-tab-2" class="flex flex-col items-center justify-center py-1 px-2.5 text-slate-400 hover:text-slate-600 tap-press">
+            <i class="ph-bold ph-calendar text-xl"></i>
+            <span class="text-[10px] font-medium mt-0.5">시간표</span>
+          </button>
+          <button onclick="switchTab(3)" id="nav-tab-3" class="flex flex-col items-center justify-center py-1 px-2.5 text-slate-400 hover:text-slate-600 tap-press">
+            <div class="relative">
+              <i class="ph-bold ph-bus text-xl"></i>
+              <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-500"></span>
+            </div>
+            <span class="text-[10px] font-medium mt-0.5">실시간통학</span>
+          </button>
+          <button onclick="switchTab(4)" id="nav-tab-4" class="flex flex-col items-center justify-center py-1 px-2.5 text-slate-400 hover:text-slate-600 tap-press">
+            <i class="ph-bold ph-chats-circle text-xl"></i>
+            <span class="text-[10px] font-medium mt-0.5">정류장제보</span>
+          </button>
+          <button onclick="switchTab(5)" id="nav-tab-5" class="flex flex-col items-center justify-center py-1 px-2.5 text-slate-400 hover:text-slate-600 tap-press">
+            <i class="ph-bold ph-user text-xl"></i>
+            <span class="text-[10px] font-medium mt-0.5">내 정보</span>
+          </button>
+        </nav>
+
+        <!-- ================= AUTHENTIC iOS SWIPE-UP HOME INDICATOR DOCK ================= -->
+        <div id="app-home-indicator-area" class="w-full bg-white pb-3 pt-1.5 flex flex-col items-center justify-center shrink-0 cursor-pointer select-none relative z-50 border-t border-slate-100 touch-none active:bg-slate-50 transition-colors">
+          <div id="app-home-bar-pill" class="home-bar-pill bg-slate-900/80 shadow-sm pointer-events-none"></div>
+          <span class="text-[9px] text-slate-400 font-medium tracking-tight mt-1 opacity-75 pointer-events-none">위로 쓸어올려 홈으로 (Swipe up / Tap)</span>
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- Phone Hardware Bottom Bezel -->
+    <div class="w-full h-3 bg-black shrink-0"></div>
+
+    <!-- ================= 35+ UNIVERSITY SELECTION MODAL ================= -->
+    <div id="modal-univ" class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end hidden">
+      <div class="bg-white rounded-t-[32px] p-4 text-slate-900 max-h-[82%] flex flex-col shadow-2xl">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div class="font-extrabold text-sm flex items-center gap-1.5 text-slate-900">
+            <i class="ph-bold ph-buildings text-blue-600 text-lg"></i>
+            <span>전국 대학교 선택 (35+ 캠퍼스)</span>
+          </div>
+          <button onclick="closeUnivModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 tap-press">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative mt-3 mb-2">
+          <i class="ph-bold ph-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+          <input type="text" id="univ-search" oninput="filterUniversities()" placeholder="학교명 검색 (예: 서울대, 고려대, 국민대)" class="w-full pl-9 pr-3 py-2 bg-slate-100 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- University Scroll List -->
+        <div id="univ-list-container" class="flex-1 overflow-y-auto space-y-1.5 py-1 text-xs pr-1"></div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="app-toast" class="absolute bottom-16 left-4 right-4 z-50 bg-slate-900/90 backdrop-blur-md text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-2xl flex items-center justify-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+      <i class="ph-bold ph-info text-cyan-400"></i>
+      <span id="app-toast-text">알림 내용</span>
+    </div>
+
+  </main>
+
+  <!-- ================= JAVASCRIPT CONTROLLER ================= -->
+  <script>
+    // 35+ Major Nationwide Universities Database
+    const UNIVERSITIES = [
+      { id: 'kookmin', name: '국민대학교', badgeColor: '#1e3a8a', major: '소프트웨어학부', hubStation: '길음역 (4호선)', shuttleName: '정문 셔틀 (정문 ↔ 길음역)', busName: '정문 시내버스 (171 / 7211)', bottleneckAlert: '정문 정류소 및 정릉로 병목' },
+      { id: 'snu', name: '서울대학교', badgeColor: '#1e293b', major: '컴퓨터공학부', hubStation: '서울대입구역 (2호선)', shuttleName: '관악캠퍼스 순환셔틀 (행정관 ↔ 전철역)', busName: '정문 관악로 버스 (5511 / 5513)', bottleneckAlert: '서울대입구역 방면 버스 대기열' },
+      { id: 'yonsei', name: '연세대학교', badgeColor: '#1e40af', major: '전기전자공학부', hubStation: '신촌역 (2호선)', shuttleName: '신촌 ↔ 송도 국제캠퍼스 셔틀', busName: '정문 앞 연세로 버스 (7720 / 7737)', bottleneckAlert: '연세로 대중교통전용지구 혼잡' },
+      { id: 'korea', name: '고려대학교', badgeColor: '#991b1b', major: '경영학과', hubStation: '안암역 / 고려대역 (6호선)', shuttleName: '자연계 ↔ 인문계 캠퍼스 셔틀', busName: '안암로 시내버스 (101 / 144 / 273)', bottleneckAlert: '안암오거리 퇴근길 정체 주의' },
+      { id: 'sogang', name: '서강대학교', badgeColor: '#b91c1c', major: '지식융합미디어학부', hubStation: '신촌역 / 대흥역', shuttleName: '정문 ↔ 지하철역 연결로', busName: '백범로 시내버스 (163 / 7013)', bottleneckAlert: '대흥역 4거리 병목' },
+      { id: 'skku_h', name: '성균관대학교 (인사캠)', badgeColor: '#047857', major: '사회과학계열', hubStation: '혜화역 (4호선)', shuttleName: '정문 ↔ 혜화역 셔틀버스', busName: '종로07 / 종로08 마을버스', bottleneckAlert: '혜화역 셔틀 승차장 대기열' },
+      { id: 'skku_s', name: '성균관대학교 (자과캠)', badgeColor: '#065f46', major: '전자전기공학부', hubStation: '성균관대역 (1호선)', shuttleName: '자과캠 순환셔틀 (역 ↔ 정문)', busName: '정문 시내버스 (62-1 / 99)', bottleneckAlert: '역전 횡단보도 지체' },
+      { id: 'hanyang', name: '한양대학교', badgeColor: '#0369a1', major: '기계공학부', hubStation: '한양대역 (2호선)', shuttleName: '신본관 ↔ 애지문 셔틀', busName: '왕십리로 시내버스 (2014 / 2222)', bottleneckAlert: '왕십리역 교차로 서행' },
+      { id: 'cau', name: '중앙대학교', badgeColor: '#1d4ed8', major: '미디어커뮤니케이션', hubStation: '상도역 / 흑석역', shuttleName: '정문 ↔ 상도역 통학 셔틀', busName: '흑석로 동작01 / 5511', bottleneckAlert: '중앙대병원 앞 경사로 정체' },
+      { id: 'khu', name: '경희대학교 (서울)', badgeColor: '#be123c', major: '자율전공학부', hubStation: '회기역 (1호선)', shuttleName: '본관 ↔ 회기역 연계 셔틀', busName: '동대문01 마을버스 / 273', bottleneckAlert: '회기역 1번 출구 마을버스 줄' },
+      { id: 'hufs', name: '한국외국어대학교', badgeColor: '#0f766e', major: '국제통상학부', hubStation: '외대앞역 (1호선)', shuttleName: '이문캠퍼스 ↔ 글로벌캠 셔틀', busName: '이문로 시내버스 (120 / 261)', bottleneckAlert: '외대앞역 골목 보행 혼잡' },
+      { id: 'uos', name: '서울시립대학교', badgeColor: '#0284c7', major: '도시공학과', hubStation: '청량리역 (1호선)', shuttleName: '정문 ↔ 청량리역 셔틀', busName: '전농로 시내버스 (420 / 3220)', bottleneckAlert: '청량리 환승센터 혼잡' },
+      { id: 'konkuk', name: '건국대학교', badgeColor: '#15803d', major: '부동산학과', hubStation: '건대입구역 (2/7호선)', shuttleName: '일감호 둘레 순환카트', busName: '능동로 버스 (240 / 721 / 2222)', bottleneckAlert: '건대입구역 사거리 정체' },
+      { id: 'dongguk', name: '동국대학교', badgeColor: '#ea580c', major: '경찰행정학부', hubStation: '동대입구역 / 충무로역', shuttleName: '팔정도 ↔ 동대입구 셔틀', busName: '퇴계로 시내버스 (01번 순환)', bottleneckAlert: '남산 진입로 서행' },
+      { id: 'hongik', name: '홍익대학교', badgeColor: '#0284c7', major: '디자인학부', hubStation: '홍대입구역 / 상수역', shuttleName: '홍문관 ↔ 세종캠 통학 셔틀', busName: '와우산로 마포08 / 마포09', bottleneckAlert: '홍대입구역 도보 밀집' },
+      { id: 'ewha', name: '이화여자대학교', badgeColor: '#047857', major: '인문과학대학', hubStation: '이대역 (2호선)', shuttleName: 'ECC ↔ 공학관 캠퍼스 셔틀', busName: '이화여대길 서대문03 / 서대문05', bottleneckAlert: '정문 앞 골목길 병목' },
+      { id: 'sookmyung', name: '숙명여자대학교', badgeColor: '#1e3a8a', major: '경영학부', hubStation: '숙대입구역 (4호선)', shuttleName: '정문 ↔ 효창공원앞역 셔틀', busName: '청파로 용산04 마을버스', bottleneckAlert: '청파로 언덕길 정체' },
+      { id: 'soongsil', name: '숭실대학교', badgeColor: '#0284c7', major: '글로벌미디어학부', hubStation: '숭실대입구역 (7호선)', shuttleName: '정문 ↔ 지하철역 연결로', busName: '상도로 시내버스 (501 / 752)', bottleneckAlert: '숭실대입구역 4거리 서행' },
+      { id: 'sejong', name: '세종대학교', badgeColor: '#b91c1c', major: '호텔관광경영학', hubStation: '어린이대공원역 (7호선)', shuttleName: '정문 ↔ 학술정보원 동선', busName: '광나루로 시내버스 (721 / 3216)', bottleneckAlert: '어린이대공원역 정체' },
+      { id: 'dankook', name: '단국대학교 (죽전)', badgeColor: '#1e3a8a', major: '모바일시스템공학', hubStation: '죽전역 (수인분당선)', shuttleName: '정문 ↔ 죽전역 통학 셔틀', busName: '죽전로 시내버스 (24 / 40)', bottleneckAlert: '죽전역 셔틀 승차홈 대기열' },
+      { id: 'gachon', name: '가천대학교', badgeColor: '#0284c7', major: 'AI인공지능학부', hubStation: '가천대역 (수인분당선)', shuttleName: '비전타워 ↔ 메디컬캠 셔틀', busName: '성남대로 시내버스 (302 / 303)', bottleneckAlert: '가천대역 환승 통로 정체' },
+      { id: 'ajou', name: '아주대학교', badgeColor: '#1d4ed8', major: '소프트웨어학과', hubStation: '광교중앙역 (신분당선)', shuttleName: '정문 ↔ 광교중앙역 통학 셔틀', busName: '월드컵로 버스 (720-1 / 80)', bottleneckAlert: '아주대삼거리 서행' },
+      { id: 'inha', name: '인하대학교', badgeColor: '#0369a1', major: '항공우주공학과', hubStation: '인하대역 (수인분당선)', shuttleName: '본관 ↔ 송도 항공우주캠 셔틀', busName: '인하로 시내버스 (511 / 5-1)', bottleneckAlert: '후문 인하로 먹자골목 혼잡' },
+      { id: 'kaist', name: 'KAIST (카이스트)', badgeColor: '#0284c7', major: '전산학부', hubStation: '월평역 (대전 1호선)', shuttleName: '본원(대전) ↔ 문지캠퍼스 셔틀', busName: '유성대로 버스 (특구1 / 604)', bottleneckAlert: '유성 IC 진입 정체' },
+      { id: 'postech', name: '포항공과대학교', badgeColor: '#be123c', major: '컴퓨터공학과', hubStation: '포항역 (KTX)', shuttleName: '지곡단지 순환 캠퍼스 셔틀', busName: '지곡로 시내버스 (305 / 308)', bottleneckAlert: '포항역 연계 버스 대기' },
+      { id: 'pnu', name: '부산대학교', badgeColor: '#1e3a8a', major: '기계공학부', hubStation: '부산대역 (부산 1호선)', shuttleName: '정문 ↔ 경암체육관 순환버스', busName: '금정07 순환 마을버스', bottleneckAlert: '부산대 정문 산복도로 경사' },
+      { id: 'knu', name: '경북대학교', badgeColor: '#b91c1c', major: '전자공학부', hubStation: '대구역 / 동대구역', shuttleName: '대구캠 ↔ 상주캠 연계 셔틀', busName: '대학로 시내버스 (410 / 937)', bottleneckAlert: '복현오거리 정체' },
+      { id: 'jnu', name: '전남대학교', badgeColor: '#047857', major: '인공지능학부', hubStation: '광주역 (경전선)', shuttleName: '용봉캠 ↔ 화순캠 셔틀버스', busName: '용봉로 시내버스 (문흥18 / 봉선27)', bottleneckAlert: '후문 상가 진입로 혼잡' },
+      { id: 'cnu', name: '충남대학교', badgeColor: '#0369a1', major: '컴퓨터융합학부', hubStation: '유성온천역 (대전 1호선)', shuttleName: '백마캠퍼스 내부 순환 셔틀', busName: '대학로 시내버스 (108 / 105)', bottleneckAlert: '유성온천역 환승 지체' }
+    ];
+
+    let currentUniv = UNIVERSITIES[0]; // 국민대학교
+    let homeDestination = '화곡역 6번 출구 (강서구)';
+    let isFeedExpanded = false;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderUniversityList();
+      applyUnivContext(currentUniv);
+      initHomeIndicatorGestures();
+      showLockScreen();
+    });
+
+    // ================= ENHANCED DUAL-TRIGGER GESTURE ENGINE =================
+    function initHomeIndicatorGestures() {
+      const appIndicatorArea = document.getElementById('app-home-indicator-area');
+      const appView = document.getElementById('view-app');
+      const lockIndicator = document.getElementById('lockscreen-home-indicator');
+
+      let startY = 0;
+      let currentY = 0;
+      let isDragging = false;
+      let hasMovedSignificantly = false;
+
+      // 1. Direct Click Fallback for instantaneous responsiveness
+      appIndicatorArea.addEventListener('click', (e) => {
+        closeAppToHomeScreen();
+      });
+
+      lockIndicator.addEventListener('click', (e) => {
+        unlockToHomeScreen();
+      });
+
+      // 2. Universal Pointer Gestures for Touch and Mouse Swipe-Up
+      function handlePointerDown(e) {
+        isDragging = true;
+        hasMovedSignificantly = false;
+        startY = e.clientY;
+        currentY = e.clientY;
+        appView.style.transition = 'none';
+        if (e.target.setPointerCapture && e.pointerId !== undefined) {
+          try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
+        }
+      }
+
+      function handlePointerMove(e) {
+        if (!isDragging) return;
+        currentY = e.clientY;
+        const deltaY = startY - currentY;
+        if (deltaY > 6) {
+          hasMovedSignificantly = true;
+          const progress = Math.min(deltaY / 130, 1);
+          const scale = 1 - progress * 0.18;
+          const translateY = -deltaY * 0.85;
+          appView.style.transform = `translateY(${translateY}px) scale(${scale})`;
+          appView.style.borderRadius = `${progress * 40}px`;
+        }
+      }
+
+      function handlePointerUp(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        const deltaY = startY - currentY;
+
+        // If swiped up by > 25px OR if clicked without drag, close app
+        if (deltaY > 25 || !hasMovedSignificantly) {
+          closeAppToHomeScreen();
+        } else {
+          // Snap back
+          appView.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1), border-radius 0.2s';
+          appView.style.transform = '';
+          appView.style.borderRadius = '';
+        }
+      }
+
+      // Bind Pointer Events to App Indicator
+      appIndicatorArea.addEventListener('pointerdown', handlePointerDown);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+
+      // Lock Screen Swipe-up
+      let lockStartY = 0;
+      lockIndicator.addEventListener('pointerdown', (e) => {
+        lockStartY = e.clientY;
+      });
+      lockIndicator.addEventListener('pointerup', (e) => {
+        const delta = lockStartY - e.clientY;
+        if (delta > 20 || Math.abs(delta) < 8) {
+          unlockToHomeScreen();
+        }
+      });
+    }
+
+    // Smooth App Close Transition to Springboard
+    function closeAppToHomeScreen() {
+      const appView = document.getElementById('view-app');
+      const homeScreen = document.getElementById('view-ios-homescreen');
+
+      appView.classList.add('app-exit-animation');
+
+      setTimeout(() => {
+        appView.classList.add('hidden');
+        appView.classList.remove('app-exit-animation');
+        appView.style.transform = '';
+        appView.style.borderRadius = '';
+        appView.style.opacity = '';
+        appView.style.transition = '';
+
+        homeScreen.classList.remove('hidden');
+        updateStatusBarTheme('dark');
+        triggerToast('아이폰 홈화면으로 복귀했습니다.');
+      }, 250);
+    }
+
+    // Screen Switching
+    function showLockScreen() {
+      document.getElementById('view-lockscreen').classList.remove('hidden');
+      document.getElementById('view-ios-homescreen').classList.add('hidden');
+      document.getElementById('view-app').classList.add('hidden');
+      updateStatusBarTheme('dark');
+      triggerToast('스마트폰 잠금화면입니다.');
+    }
+
+    function showIosHomeScreen() {
+      document.getElementById('view-lockscreen').classList.add('hidden');
+      document.getElementById('view-ios-homescreen').classList.remove('hidden');
+      document.getElementById('view-app').classList.add('hidden');
+      updateStatusBarTheme('dark');
+      triggerToast('아이폰 홈화면입니다. ⚡ SKIP 앱을 탭해보세요!');
+    }
+
+    function showSkipAppDirect() {
+      document.getElementById('view-lockscreen').classList.add('hidden');
+      document.getElementById('view-ios-homescreen').classList.add('hidden');
+      document.getElementById('view-app').classList.remove('hidden');
+      updateStatusBarTheme('light');
+    }
+
+    function unlockToHomeScreen() {
+      document.getElementById('view-lockscreen').classList.add('hidden');
+      document.getElementById('view-ios-homescreen').classList.remove('hidden');
+      triggerToast('잠금 해제 완료: 아이폰 홈화면으로 이동했습니다.');
+    }
+
+    function openSkipApp() {
+      const homeScreen = document.getElementById('view-ios-homescreen');
+      homeScreen.classList.add('transition-transform', 'duration-200', 'scale-95', 'opacity-0');
+      setTimeout(() => {
+        homeScreen.classList.add('hidden');
+        homeScreen.classList.remove('transition-transform', 'duration-200', 'scale-95', 'opacity-0');
+        document.getElementById('view-app').classList.remove('hidden');
+        updateStatusBarTheme('light');
+        switchTab(1);
+        triggerToast('⚡ SKIP 캠퍼스 에이전트가 실행되었습니다.');
+      }, 180);
+    }
+
+    function updateStatusBarTheme(theme) {
+      const statusBar = document.getElementById('phone-status-bar');
+      const timeTxt = document.getElementById('phone-time');
+      const icons = document.getElementById('status-icons');
+
+      if (theme === 'light') {
+        statusBar.classList.remove('text-white');
+        statusBar.classList.add('text-slate-800');
+        if (timeTxt) timeTxt.classList.replace('text-white', 'text-slate-900');
+        if (icons) icons.classList.replace('text-white', 'text-slate-800');
+      } else {
+        statusBar.classList.remove('text-slate-800');
+        statusBar.classList.add('text-white');
+        if (timeTxt) timeTxt.classList.replace('text-slate-900', 'text-white');
+        if (icons) icons.classList.replace('text-slate-800', 'text-white');
+      }
+    }
+
+    // 5-Tab Navigation Controller
+    function switchTab(tabIndex) {
+      for (let i = 1; i <= 5; i++) {
+        const pane = document.getElementById(`tab-pane-${i}`);
+        const navBtn = document.getElementById(`nav-tab-${i}`);
+        if (pane) pane.classList.add('hidden');
+        if (navBtn) {
+          navBtn.classList.remove('text-blue-600');
+          navBtn.classList.add('text-slate-400');
+        }
+      }
+
+      const activePane = document.getElementById(`tab-pane-${tabIndex}`);
+      const activeBtn = document.getElementById(`nav-tab-${tabIndex}`);
+      if (activePane) activePane.classList.remove('hidden');
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-400');
+        activeBtn.classList.add('text-blue-600');
+      }
+      if (tabIndex === 3) loadLiveBoard();
+    }
+
+    // ---------------- 실시간 출발 현황 (/api/board) ----------------
+    const CONGESTION_STYLE = {
+      '여유': 'bg-emerald-100 text-emerald-700',
+      '보통': 'bg-amber-100 text-amber-700',
+      '혼잡': 'bg-rose-100 text-rose-700',
+      '매우혼잡': 'bg-rose-600 text-white',
+    };
+    let liveBoardTimer = null;
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function fmtArrival(seconds, message) {
+      if (seconds === 0) return '곧 도착';
+      if (seconds == null) return escapeHtml(message || '정보 없음');
+      return `${Math.floor(seconds / 60)}분 ${seconds % 60}초`;
+    }
+
+    function congestionBadge(a) {
+      if (a.seconds == null) return '';
+      const level = a.full
+        ? '<span class="px-1.5 py-0.5 rounded-full bg-rose-600 text-white font-bold text-[10px]">만차</span>'
+        : a.congestion ? `<span class="px-1.5 py-0.5 rounded-full font-bold text-[10px] ${CONGESTION_STYLE[a.congestion]}">${a.congestion}</span>` : '';
+      const riders = a.passengers ? `<span class="text-slate-500">${a.passengers}명</span>` : '';
+      return `${riders} ${level}`;
+    }
+
+    function renderBusPlace(p) {
+      const rows = p.data.routes.map((r) => {
+        const [a1, a2] = r.arrivals;
+        return `
+          <div class="flex items-start justify-between gap-2 py-1">
+            <div class="min-w-0">
+              <div class="font-extrabold text-slate-900">${escapeHtml(r.route)}</div>
+              <div class="text-[10px] text-slate-500 truncate">${escapeHtml(r.direction || r.nextStop || '')} 방면</div>
+            </div>
+            <div class="text-right shrink-0 space-y-0.5">
+              <div class="font-bold text-slate-900">${fmtArrival(a1.seconds, a1.message)} ${congestionBadge(a1)}</div>
+              <div class="text-[10px] text-slate-500">다음 ${fmtArrival(a2.seconds, a2.message)} ${congestionBadge(a2)}</div>
+            </div>
+          </div>`;
+      }).join('');
+      return rows || '<div class="py-1 text-slate-500">운행 정보 없음</div>';
+    }
+
+    function renderSubwayPlace(p) {
+      const byDir = {};
+      for (const t of p.data.trains) (byDir[t.direction] ??= []).push(t);
+      const rows = Object.entries(byDir).map(([dir, trains]) => `
+        <div class="py-1">
+          <div class="font-extrabold text-slate-900">${escapeHtml(dir)}</div>
+          ${trains.slice(0, 2).map((t) => `
+            <div class="flex justify-between text-[11px]">
+              <span class="text-slate-600 truncate">${escapeHtml(t.heading)}</span>
+              <span class="font-bold text-slate-900 shrink-0">${fmtArrival(t.seconds, t.message)}</span>
+            </div>`).join('')}
+        </div>`).join('');
+      return rows || '<div class="py-1 text-slate-500">도착 정보 없음</div>';
+    }
+
+    // ---------------- 하교 경로 추천 (/api/recommend) ----------------
+    let recMode = 'fast';
+
+    function setRecMode(mode) {
+      recMode = mode;
+      const on = ['bg-white', 'text-blue-700', 'shadow-sm'];
+      for (const m of ['fast', 'comfort']) {
+        const btn = document.getElementById(`rec-mode-${m}`);
+        btn.classList.toggle('text-slate-500', m !== mode);
+        on.forEach((c) => btn.classList.toggle(c, m === mode));
+      }
+      if (document.getElementById('rec-results').children.length) runRecommend();
+    }
+
+    // "화곡역 6번 출구 (강서구)" → "화곡"
+    function homeStationName() {
+      return homeDestination.match(/^\s*(\S+?)역/)?.[1] ?? homeDestination.split(/\s/)[0];
+    }
+
+    function getPosition() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+        );
+      });
+    }
+
+    function hhmm(iso) {
+      return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+
+    function renderLeg(l) {
+      if (l.type === 'walk') {
+        return `<div class="text-slate-500">🚶 도보 ${l.minutes}분${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.estimated ? ' (직선거리 추정)' : ''}</div>`;
+      }
+      const icon = l.type === 'bus' ? '🚌' : '🚇';
+      const name = l.type === 'bus' ? `${escapeHtml(l.route)}번` : escapeHtml(l.line);
+      const wait = `${Math.round(l.waitSec / 60)}분 대기${l.realtime ? '' : '(추정)'}`;
+      const crowd = l.type === 'bus' ? congestionBadge({ seconds: 0, ...l }) : '';
+      const seat = l.seatLikely === true ? '<span class="text-emerald-700 font-bold">착석 가능</span>'
+        : l.seatLikely === false ? '<span class="text-rose-600 font-bold">서서 감</span>' : '';
+      const miss = l.missProb >= 0.4 ? `<span class="text-rose-600 font-bold">못 탈 확률 ${Math.round(l.missProb * 100)}%</span>` : '';
+      return `
+        <div>
+          <div class="font-bold text-slate-900">${icon} ${name} <span class="font-normal text-slate-500">${escapeHtml(l.from)} ${hhmm(l.departAt)} 탑승 → ${escapeHtml(l.to)}</span></div>
+          <div class="pl-5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">
+            <span>${wait} · ${l.rideMin}분 탑승</span> ${crowd} ${seat} ${miss}
+          </div>
+          ${l.notes.length ? `<div class="pl-5 text-[10px] text-slate-400">${l.notes.map(escapeHtml).join(' · ')}</div>` : ''}
+        </div>`;
+    }
+
+    async function runRecommend() {
+      const box = document.getElementById('rec-results');
+      const meta = document.getElementById('rec-meta');
+      if (location.protocol === 'file:') {
+        meta.textContent = 'node server.js로 실행한 주소에서만 동작해요.';
+        return;
+      }
+      meta.textContent = '위치 확인 중…';
+      box.innerHTML = '';
+      const pos = await getPosition();
+      meta.textContent = '실시간 경로 계산 중…';
+      const qs = new URLSearchParams({ home: homeStationName(), mode: recMode });
+      if (pos) { qs.set('lat', pos.lat); qs.set('lng', pos.lng); }
+      try {
+        const res = await fetch(`/api/recommend?${qs}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        meta.textContent = `${pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준'} → ${data.destination.name}역 · ${hhmm(data.generatedAt)} 계산`;
+        box.innerHTML = data.routes.map((r, i) => `
+          <div class="px-3.5 py-2.5 space-y-1.5 ${i === 0 ? 'bg-blue-50/60' : ''}">
+            <div class="flex items-baseline justify-between">
+              <span class="font-extrabold ${i === 0 ? 'text-blue-700' : 'text-slate-800'}">${i + 1}순위 · ${hhmm(r.arriveAt)} 도착</span>
+              <span class="text-[11px] text-slate-500">${Math.round(r.totalSec / 60)}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}</span>
+            </div>
+            ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+            <div class="space-y-1">${r.legs.map(renderLeg).join('')}</div>
+          </div>`).join('') || '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
+      } catch (e) {
+        meta.textContent = '';
+        box.innerHTML = `<div class="p-3 text-rose-700">추천 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function loadLiveBoard() {
+      const box = document.getElementById('live-board');
+      const stamp = document.getElementById('live-board-updated');
+      clearTimeout(liveBoardTimer);
+      if (location.protocol === 'file:') {
+        box.innerHTML = '<div class="p-3 text-slate-600">실시간 데이터는 <b>node server.js</b>로 실행한 주소(http://localhost:3000)에서 볼 수 있어요.</div>';
+        stamp.textContent = '서버 필요';
+        return;
+      }
+      try {
+        const res = await fetch('/api/board');
+        const board = await res.json();
+        if (!res.ok) throw new Error(board.error || res.statusText);
+        box.innerHTML = board.places.map((p) => `
+          <div class="px-3.5 py-2">
+            <div class="text-[11px] font-bold text-blue-700 mb-1">${escapeHtml(p.label)}</div>
+            ${!p.ok
+              ? `<div class="text-rose-700">${escapeHtml(p.error)}</div>`
+              : p.type === 'bus' ? renderBusPlace(p) : renderSubwayPlace(p)}
+          </div>`).join('');
+        stamp.textContent = new Date(board.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch (e) {
+        box.innerHTML = `<div class="p-3 text-rose-700">불러오기 실패: ${escapeHtml(e.message)}</div>`;
+        stamp.textContent = '실패';
+      }
+      // 통학 탭이 열려 있는 동안 30초마다 갱신
+      if (!document.getElementById('tab-pane-3').classList.contains('hidden')) {
+        liveBoardTimer = setTimeout(loadLiveBoard, 30_000);
+      }
+    }
+
+    // Submode Toggle (Commute tab)
+    function switchCommuteSubMode(mode) {
+      const dismissalBox = document.getElementById('submode-dismissal');
+      const morningBox = document.getElementById('submode-morning');
+      const btnD = document.getElementById('btn-sub-dismissal');
+      const btnM = document.getElementById('btn-sub-morning');
+
+      if (mode === 'morning') {
+        morningBox.classList.remove('hidden');
+        dismissalBox.classList.add('hidden');
+        btnM.classList.add('bg-white', 'text-blue-700', 'shadow-sm');
+        btnM.classList.remove('text-slate-600');
+        btnD.classList.remove('bg-white', 'text-blue-700', 'shadow-sm');
+        btnD.classList.add('text-slate-600');
+      } else {
+        dismissalBox.classList.remove('hidden');
+        morningBox.classList.add('hidden');
+        btnD.classList.add('bg-white', 'text-blue-700', 'shadow-sm');
+        btnD.classList.remove('text-slate-600');
+        btnM.classList.remove('bg-white', 'text-blue-700', 'shadow-sm');
+        btnM.classList.add('text-slate-600');
+      }
+    }
+
+    // Helper: Go directly to Commute Tab with Dismissal Mode active
+    function goToDismissalCommuteTab() {
+      switchTab(3);
+      switchCommuteSubMode('dismissal');
+    }
+
+    function unlockAndGoToCommute() {
+      document.getElementById('view-lockscreen').classList.add('hidden');
+      document.getElementById('view-ios-homescreen').classList.add('hidden');
+      document.getElementById('view-app').classList.remove('hidden');
+      updateStatusBarTheme('light');
+      goToDismissalCommuteTab();
+      triggerToast('하교 추천 3대 대안 비교 화면으로 이동했습니다.');
+    }
+
+    // Push Banner
+    function triggerSimulatedPush() {
+      const banner = document.getElementById('push-notification-banner');
+      banner.classList.remove('hidden');
+      setTimeout(() => {
+        banner.classList.remove('-translate-y-64');
+        banner.classList.add('translate-y-0');
+      }, 50);
+    }
+
+    function dismissPush() {
+      const banner = document.getElementById('push-notification-banner');
+      banner.classList.remove('translate-y-0');
+      banner.classList.add('-translate-y-64');
+      setTimeout(() => banner.classList.add('hidden'), 300);
+    }
+
+    function clickPushNotification() {
+      dismissPush();
+      document.getElementById('view-lockscreen').classList.add('hidden');
+      document.getElementById('view-ios-homescreen').classList.add('hidden');
+      document.getElementById('view-app').classList.remove('hidden');
+      updateStatusBarTheme('light');
+      goToDismissalCommuteTab();
+      triggerToast('실시간 하교 3가지 대안 경로로 이동했습니다.');
+    }
+
+    // Inspect Class Trigger
+    function inspectClassTrigger(className, room, endTime) {
+      const box = document.getElementById('class-inspect-box');
+      box.innerHTML = `
+        <div class="flex items-center justify-between font-bold text-slate-800 mb-1">
+          <span class="flex items-center gap-1.5 text-blue-600">
+            <i class="ph-bold ph-bell-ringing"></i> ${className} 연동 확인됨
+          </span>
+          <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">${endTime} 종료</span>
+        </div>
+        <div class="text-[11px] text-slate-600">
+          강의실: <strong>${room}</strong><br>
+          종료 5분 전에 정문 버스, 정문 셔틀, 후문 우이신설선 3종 경로 혼잡도를 계산하여 스마트폰 푸시로 브리핑합니다.
+        </div>
+      `;
+      triggerToast(`${className} 통학 연동 정보를 확인했습니다.`);
+    }
+
+    // Queue Report
+    function submitReport(statusText) {
+      const list = document.getElementById('report-feed-list');
+      const newReport = document.createElement('div');
+      newReport.className = 'p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs';
+      newReport.innerHTML = `
+        <div class="flex items-center justify-between font-bold text-slate-800">
+          <span class="flex items-center gap-1 text-blue-600">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> 정문 셔틀 승차장
+          </span>
+          <span class="text-[10px] text-blue-600 font-semibold">방금 전 (내 제보)</span>
+        </div>
+        <p class="text-[11px] text-slate-700 mt-1">
+          현장 상태: "${statusText}" 제보가 성공적으로 등록되었습니다.
+        </p>
+      `;
+      list.prepend(newReport);
+      triggerToast('제보가 등록되었습니다. 학우들에게 실시간 공유됩니다 (+10 P)');
+    }
+
+    function toggleFeedMore() {
+      const extra = document.getElementById('extra-feed-container');
+      const text = document.getElementById('btn-load-more-text');
+      const icon = document.getElementById('btn-load-more-icon');
+      isFeedExpanded = !isFeedExpanded;
+
+      if (isFeedExpanded) {
+        extra.classList.remove('hidden');
+        text.innerText = '실시간 제보 접기';
+        icon.classList.replace('ph-caret-down', 'ph-caret-up');
+      } else {
+        extra.classList.add('hidden');
+        text.innerText = '실시간 장소별 제보 더보기 (2건 추가)';
+        icon.classList.replace('ph-caret-up', 'ph-caret-down');
+      }
+    }
+
+    // University Modal
+    function openUnivModal() {
+      document.getElementById('modal-univ').classList.remove('hidden');
+      renderUniversityList();
+    }
+
+    function closeUnivModal() {
+      document.getElementById('modal-univ').classList.add('hidden');
+    }
+
+    function renderUniversityList(filter = '') {
+      const container = document.getElementById('univ-list-container');
+      container.innerHTML = '';
+      
+      const filtered = UNIVERSITIES.filter(u => u.name.toLowerCase().includes(filter.toLowerCase()));
+      filtered.forEach(u => {
+        const isSelected = u.id === currentUniv.id;
+        const div = document.createElement('div');
+        div.className = `p-2.5 rounded-xl border flex items-center justify-between cursor-pointer tap-press transition-colors ${isSelected ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' : 'bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100'}`;
+        div.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full" style="background-color: ${u.badgeColor}"></span>
+            <span>${u.name}</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-medium">${u.hubStation.split(' ')[0]}</span>
+        `;
+        div.onclick = () => selectUniversity(u);
+        container.appendChild(div);
+      });
+    }
+
+    function filterUniversities() {
+      const q = document.getElementById('univ-search').value.trim();
+      renderUniversityList(q);
+    }
+
+    function selectUniversity(univ) {
+      currentUniv = univ;
+      applyUnivContext(univ);
+      closeUnivModal();
+      triggerToast(`[${univ.name}] 통학 모드로 변경되었습니다.`);
+    }
+
+    function applyUnivContext(univ) {
+      document.getElementById('appbar-univ-name').innerText = univ.name;
+      document.getElementById('my-current-univ-txt').innerText = univ.name;
+      document.getElementById('my-profile-univ').innerText = `${univ.major} · 재학생`;
+      const btnCtrlUniv = document.querySelector('#headerSchoolName');
+      if (btnCtrlUniv) btnCtrlUniv.innerText = univ.name;
+    }
+
+    function openEditDestModal() {
+      const newDest = prompt('새로운 귀가 목적지(하차 거점 역)를 입력하세요:', homeDestination);
+      if (newDest && newDest.trim()) {
+        homeDestination = newDest.trim();
+        document.getElementById('home-card-dest').innerText = homeDestination;
+        document.getElementById('my-current-dest-txt').innerText = homeDestination;
+        triggerToast('귀가 목적지 거점이 수정되었습니다.');
+      }
+    }
+
+    function triggerToast(msg) {
+      const toast = document.getElementById('app-toast');
+      const toastText = document.getElementById('app-toast-text');
+      toastText.innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
