@@ -1,13 +1,30 @@
 // ODsay 대중교통 길찾기 (lab.odsay.com)
 // 무료 요금제는 하루 30회라, 경로 구조는 오래 저장하고 실시간 부분만 매번 다시 계산한다.
-// Vercel Runtime Cache에 저장해서 서버 인스턴스가 바뀌어도 유지 (로컬에서는 메모리)
+// 배포: Vercel Runtime Cache, 로컬 개발: data/.odsay-cache.json 파일 (재시작해도 유지)
 import { getCache } from '@vercel/functions';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { requireEnv, HttpError } from './_lib.js';
 
 const BASE = 'https://api.odsay.com/v1/api';
 const STATION_TTL_SEC = 30 * 24 * 3600;
-const PATH_TTL_SEC = 6 * 3600;
-const cache = getCache({ namespace: 'odsay' });
+const PATH_TTL_SEC = process.env.VERCEL ? 6 * 3600 : 7 * 24 * 3600;
+const LOCAL_FILE = process.env.VERCEL ? null : new URL('../data/.odsay-cache.json', import.meta.url);
+const cache = LOCAL_FILE ? fileCache(LOCAL_FILE) : getCache({ namespace: 'odsay' });
+
+function fileCache(file) {
+  let store = {};
+  try { store = JSON.parse(readFileSync(file, 'utf8')); } catch {}
+  return {
+    async get(key) {
+      const e = store[key];
+      return e && Date.now() < e.exp ? e.value : undefined;
+    },
+    async set(key, value, { ttl }) {
+      store[key] = { exp: Date.now() + ttl * 1000, value };
+      writeFileSync(file, JSON.stringify(store));
+    },
+  };
+}
 
 async function odsay(path, params) {
   const qs = new URLSearchParams({ ...params, apiKey: requireEnv('ODSAY_KEY') });
@@ -17,7 +34,10 @@ async function odsay(path, params) {
   const data = await res.json();
   if (data.error) {
     const e = Array.isArray(data.error) ? data.error[0] : data.error;
-    throw new HttpError(502, `ODsay 오류 ${e.code}: ${e.message || e.msg}`);
+    const quota = String(e.code) === '429';
+    throw new HttpError(quota ? 429 : 502, quota
+      ? '오늘 길찾기(ODsay) 무료 호출 한도를 다 썼어요. 내일 다시 시도하거나, 이미 계산해 둔 출발 위치(정문)로 조회해 주세요.'
+      : `ODsay 오류 ${e.code}: ${e.message || e.msg}`);
   }
   return data.result;
 }
@@ -41,10 +61,14 @@ export async function findStation(name) {
   });
 }
 
+export function pathKey(from, to) {
+  const r = (n) => n.toFixed(3);
+  return `path:${r(from.lat)},${r(from.lng)}>${r(to.lat)},${r(to.lng)}`;
+}
+
 // 출발·도착 좌표는 약 100m 단위로 묶어서, 같은 건물 근처에서는 저장된 경로를 재사용
 export async function searchPaths(from, to) {
-  const r = (n) => n.toFixed(3);
-  return cached(`path:${r(from.lat)},${r(from.lng)}>${r(to.lat)},${r(to.lng)}`, PATH_TTL_SEC, async () => {
+  return cached(pathKey(from, to), PATH_TTL_SEC, async () => {
     const result = await odsay('searchPubTransPathT', { SX: from.lng, SY: from.lat, EX: to.lng, EY: to.lat });
     return result?.path ?? [];
   });

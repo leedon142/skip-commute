@@ -77,12 +77,17 @@ function matchRoute(stopData, busNo) {
 }
 
 // 내가 정류장에 도착하는 시점(atSec) 이후 첫 차
+// ODsay 구간의 정차 정류장·역 이름 (탑승지 포함, 하차지 포함)
+function stopNames(sp) {
+  return (sp.passStopList?.stations ?? []).map((s) => s.stationName);
+}
+
 async function busLeg(sp, atSec, now, arsOverride) {
   const busNo = sp.lane?.[0]?.busNo;
   const ars = arsOverride ?? sp.startArsID?.replace('-', '');
   const leg = {
-    type: 'bus', route: busNo, from: sp.startName, to: sp.endName, ars,
-    rideMin: sp.sectionTime, stations: sp.stationCount,
+    type: 'bus', route: busNo, busType: sp.lane?.[0]?.type ?? null, from: sp.startName, to: sp.endName, ars,
+    rideMin: sp.sectionTime, stations: sp.stationCount, stops: stopNames(sp),
     realtime: false, waitSec: null, congestion: null, passengers: null, full: false, notes: [],
   };
 
@@ -105,6 +110,10 @@ async function busLeg(sp, atSec, now, arsOverride) {
     leg.congestion = catchable.congestion;
     leg.passengers = catchable.passengers;
     leg.full = catchable.full;
+    leg.stopsAway = catchable.stopsAway;
+    // 이 차를 놓치면 탈 다음 차
+    const after = route.arrivals.find((a) => a !== catchable && a.seconds != null && a.seconds > catchable.seconds);
+    if (after) leg.nextVehicle = { waitSec: after.seconds - atSec, passengers: after.passengers, congestion: after.congestion, stopsAway: after.stopsAway };
   } else {
     // 보이는 마지막 차를 놓쳤으면 그 차 + 배차간격, 운행 중인 차가 안 보이면 배차간격의 절반
     const lastSeen = Math.max(-1, ...(route?.arrivals ?? []).map((a) => a.seconds ?? -1));
@@ -155,7 +164,7 @@ async function subwayLeg(sp, atSec, now) {
   const lane = sp.lane?.[0];
   const leg = {
     type: 'subway', line: lane?.name, from: sp.startName, to: sp.endName, way: sp.way,
-    rideMin: sp.sectionTime, stations: sp.stationCount,
+    rideMin: sp.sectionTime, stations: sp.stationCount, stops: stopNames(sp),
     realtime: false, waitSec: null, congestion: null, notes: [], missProb: 0, extraWaitSec: 0, seatLikely: null,
   };
   const lineId = subwayIdFor(lane);
@@ -185,6 +194,7 @@ async function subwayLeg(sp, atSec, now) {
   const stations = passed.length ? passed : [sp.startName];
   const pcts = stations.map((name) => ({ name, pct: subwayCongestion(lane, name, sp.wayCode, boardAt) }));
   const board = pcts[0];
+  leg.stationCongestion = pcts.filter((p) => p.pct != null);
   if (board?.pct != null) {
     const peak = pcts.reduce((a, b) => ((b.pct ?? -1) > (a.pct ?? -1) ? b : a));
     leg.congestionPct = board.pct;
@@ -230,7 +240,15 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0) {
   for (const [idx, sp] of path.subPath.entries()) {
     if (sp.trafficType === 3) {
       const sec = idx === 0 && firstWalkOverride ? firstWalkOverride.sec : sp.sectionTime * 60;
-      if (sec > 0) legs.push({ type: 'walk', minutes: Math.round(sec / 60), estimated: !!firstWalkOverride && idx === 0, to: firstWalkOverride && idx === 0 ? firstWalkOverride.to : null });
+      if (sec > 0) {
+        const overridden = !!firstWalkOverride && idx === 0;
+        legs.push({
+          type: 'walk', minutes: Math.round(sec / 60), estimated: overridden,
+          to: overridden ? firstWalkOverride.to : null,
+          distanceM: overridden ? null : sp.distance ?? null,
+          startAt: new Date(now + t * 1000).toISOString(),
+        });
+      }
       t += sec;
       continue;
     }
@@ -330,6 +348,7 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
       for (const l of r.legs) {
         if (l.departAt) l.departAt = move(l.departAt);
         if (l.arriveAt) l.arriveAt = move(l.arriveAt);
+        if (l.startAt) l.startAt = move(l.startAt);
       }
       r.leaveBy = r.leaveAt = new Date(leaveBy).toISOString();
       r.arriveAt = move(r.arriveAt);

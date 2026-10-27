@@ -4,3 +4,4 @@ node_modules/
 data/out/
 .vercel
 data/raw/
+data/.odsay-cache.json
