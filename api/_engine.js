@@ -7,6 +7,9 @@ import subwayStats from '../data/subway_congestion.json' with { type: 'json' };
 
 // 정문 국민대앞(08107) 좌표. GPS가 없을 때 출발지로 사용
 export const MAIN_GATE = { lat: 37.6106795513, lng: 126.9940273315 };
+// 국민대후문(08392) 좌표. 캠퍼스 출발 경로의 두 번째 기준점
+const BACK_GATE = { lat: 37.6111973107, lng: 126.9994533062 };
+const CAMPUS_RADIUS_M = 1000;
 
 const BOARD_BUFFER_SEC = 30; // 정류장 도착 후 탑승까지 여유
 const WALK_M_PER_MIN = 70; // 직선거리 기반 도보 추정 속도
@@ -302,10 +305,27 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   const leaveTarget = arriveBy ? arriveBy - MORNING_PROBE_SEC * 1000 : departAt ?? now;
   const startSec = Math.max(0, Math.round((leaveTarget - now) / 1000));
 
-  const paths = (await searchPaths(from, to)).slice(0, 6);
+  // 캠퍼스 안에서 출발하면 경로는 정문·후문 기준점에서 받아 재사용하고 (ODsay 호출 절약),
+  // 실제 위치에서 첫 정류장까지 걷는 시간만 따로 계산
+  const onCampus = direction === 'home' && distM(origin, MAIN_GATE) <= CAMPUS_RADIUS_M;
+  const anchors = onCampus ? [MAIN_GATE, BACK_GATE] : [from];
+  // 기준점 하나가 실패해도(예: ODsay 일일 한도) 나머지로 추천
+  const settled = await Promise.allSettled(anchors.map(async (a) =>
+    (await searchPaths(a, to)).slice(0, 5).map((path) => ({ path, anchor: a })),
+  ));
+  const paths = settled.flatMap((s) => (s.status === 'fulfilled' ? s.value : []));
+  if (!paths.length) throw settled.find((s) => s.status === 'rejected')?.reason ?? new Error('경로를 찾지 못했어요');
   const nearStops = direction === 'home'
     ? await busStopsNear(from.lat, from.lng, MAX_UPSTREAM_WALK_M).catch(() => [])
     : [];
+
+  const walkFromOrigin = (path, anchor) => {
+    if (!onCampus || distM(origin, anchor) < 30) return null;
+    const first = path.subPath.find((sp) => sp.trafficType !== 3);
+    if (!first?.startY) return null;
+    const stop = { lat: Number(first.startY), lng: Number(first.startX) };
+    return { sec: walkSecFromDist(distM(origin, stop)), to: first.startName };
+  };
 
   // 등교는 첫 계산으로 소요 시간을 구한 뒤, 실제 출발 시각으로 한 번 더 계산 (혼잡도 시간대·실시간 반영)
   const run = async (path, variant, tags) => {
@@ -317,8 +337,8 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     return { ...r, tags };
   };
   const jobs = [];
-  for (const path of paths) {
-    jobs.push(run(path, null, []));
+  for (const { path, anchor } of paths) {
+    jobs.push(run(path, walkFromOrigin(path, anchor), []));
     jobs.push(upstreamVariant(path, from, nearStops).then((v) => v && run(path, v, [`${v.to}까지 걸어서 먼저 타기`])));
   }
   const results = (await Promise.all(jobs)).filter(Boolean);

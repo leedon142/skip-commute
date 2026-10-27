@@ -7,7 +7,8 @@ import { requireEnv, HttpError } from './_lib.js';
 
 const BASE = 'https://api.odsay.com/v1/api';
 const STATION_TTL_SEC = 30 * 24 * 3600;
-const PATH_TTL_SEC = process.env.VERCEL ? 6 * 3600 : 7 * 24 * 3600;
+// 노선 구조는 자주 안 바뀌므로 7일. 실시간 도착·혼잡도는 매번 새로 계산
+const PATH_TTL_SEC = 7 * 24 * 3600;
 const LOCAL_FILE = process.env.VERCEL ? null : new URL('../data/.odsay-cache.json', import.meta.url);
 const cache = LOCAL_FILE ? fileCache(LOCAL_FILE) : getCache({ namespace: 'odsay' });
 
