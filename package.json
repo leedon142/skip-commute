@@ -2,8 +2,13 @@
   "name": "skip-commute",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "node server.js"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.10.4"
   }
 }

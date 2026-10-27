@@ -108,9 +108,13 @@ async function busLeg(sp, atSec, now, arsOverride) {
   } else {
     // 보이는 마지막 차를 놓쳤으면 그 차 + 배차간격, 운행 중인 차가 안 보이면 배차간격의 절반
     const lastSeen = Math.max(-1, ...(route?.arrivals ?? []).map((a) => a.seconds ?? -1));
-    if (lastSeen >= 0) {
+    if (lastSeen >= 0 && atSec - lastSeen < headwaySec) {
       leg.waitSec = Math.max(lastSeen + headwaySec - atSec, BOARD_BUFFER_SEC);
       leg.notes.push('실시간으로 보이는 차는 놓침 · 그다음 차 추정');
+    } else if (lastSeen >= 0) {
+      // 정류장 도착이 실시간으로 보이는 범위보다 한참 뒤 (예: 내일 아침)
+      leg.waitSec = Math.round(headwaySec / 2);
+      leg.notes.push('실시간 범위 밖 · 배차간격으로 추정');
     } else {
       leg.waitSec = Math.round(headwaySec / 2);
       const msg = route?.arrivals[0]?.message;
@@ -219,9 +223,10 @@ function subwayCongestion(lane, station, wayCode, date) {
 }
 
 // ODsay 경로 하나를 실시간으로 다시 계산
-export async function evaluatePath(path, now, firstWalkOverride) {
+export async function evaluatePath(path, now, firstWalkOverride, startSec = 0) {
   const legs = [];
-  let t = 0;
+  // startSec: 지금부터 몇 초 뒤에 출발하는지. 실시간 도착 정보는 항상 '지금' 기준이라 같은 시간축에서 계산
+  let t = startSec;
   for (const [idx, sp] of path.subPath.entries()) {
     if (sp.trafficType === 3) {
       const sec = idx === 0 && firstWalkOverride ? firstWalkOverride.sec : sp.sectionTime * 60;
@@ -238,7 +243,12 @@ export async function evaluatePath(path, now, firstWalkOverride) {
     leg.arriveAt = new Date(now + t * 1000).toISOString();
     legs.push(leg);
   }
-  return { legs, totalSec: t, arriveAt: new Date(now + t * 1000).toISOString() };
+  return {
+    legs,
+    totalSec: t - startSec,
+    leaveAt: new Date(now + startSec * 1000).toISOString(),
+    arriveAt: new Date(now + t * 1000).toISOString(),
+  };
 }
 
 // 첫 버스를 한 정류장 앞에서 타는 변형 경로
@@ -259,16 +269,39 @@ function signature(r) {
   return r.legs.filter((l) => l.type !== 'walk').map((l) => `${l.type}:${l.route ?? l.line}@${l.ars ?? l.from}`).join('>');
 }
 
-export async function recommend({ origin, home, mode = 'fast', now = Date.now() }) {
-  const dest = await findStation(home);
-  const paths = (await searchPaths(origin, dest)).slice(0, 6);
-  const nearStops = await busStopsNear(origin.lat, origin.lng, MAX_UPSTREAM_WALK_M).catch(() => []);
+// 등교: 강의실까지 들어가는 여유 (건물별 도보 데이터가 생기면 대체)
+const CLASS_BUFFER_SEC = 10 * 60;
+// 등교 계산 시 첫 계산용 출발 시각 (수업 시작 몇 초 전)
+const MORNING_PROBE_SEC = 100 * 60;
 
+// direction 'home': origin(학교/GPS) → 집,  'school': 집 → origin 자리에 정문
+// departAt: 이 시각에 출발 (기본 지금), arriveBy: 이 시각까지 도착 (등교)
+export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, now = Date.now() }) {
+  const homeStation = await findStation(home);
+  const [from, to] = direction === 'school'
+    ? [homeStation, { ...MAIN_GATE, name: '국민대 정문' }]
+    : [origin, homeStation];
+  const leaveTarget = arriveBy ? arriveBy - MORNING_PROBE_SEC * 1000 : departAt ?? now;
+  const startSec = Math.max(0, Math.round((leaveTarget - now) / 1000));
+
+  const paths = (await searchPaths(from, to)).slice(0, 6);
+  const nearStops = direction === 'home'
+    ? await busStopsNear(from.lat, from.lng, MAX_UPSTREAM_WALK_M).catch(() => [])
+    : [];
+
+  // 등교는 첫 계산으로 소요 시간을 구한 뒤, 실제 출발 시각으로 한 번 더 계산 (혼잡도 시간대·실시간 반영)
+  const run = async (path, variant, tags) => {
+    let r = await evaluatePath(path, now, variant, startSec);
+    if (arriveBy) {
+      const refined = Math.max(0, Math.round((arriveBy - now) / 1000 - r.totalSec - CLASS_BUFFER_SEC));
+      r = await evaluatePath(path, now, variant, refined);
+    }
+    return { ...r, tags };
+  };
   const jobs = [];
   for (const path of paths) {
-    jobs.push(evaluatePath(path, now).then((r) => ({ ...r, tags: [] })));
-    jobs.push(upstreamVariant(path, origin, nearStops).then((v) => v
-      && evaluatePath(path, now, v).then((r) => ({ ...r, tags: [`${v.to}까지 걸어서 먼저 타기`] }))));
+    jobs.push(run(path, null, []));
+    jobs.push(upstreamVariant(path, from, nearStops).then((v) => v && run(path, v, [`${v.to}까지 걸어서 먼저 타기`])));
   }
   const results = (await Promise.all(jobs)).filter(Boolean);
 
@@ -289,11 +322,26 @@ export async function recommend({ origin, home, mode = 'fast', now = Date.now() 
     r.standingMin = Math.round(standingSec / 60);
     // 편한 순: 서서 가는 시간 1분을 도착 0.5분 늦는 것과 같게 취급
     r.score = r.totalSec + (mode === 'comfort' ? standingSec * 0.5 : 0);
+    if (arriveBy) {
+      // 소요 시간을 거꾸로 빼서 '늦어도 이때는 나가야 함', 구간 시각도 그 출발 기준으로 옮김
+      const leaveBy = arriveBy - (r.totalSec + CLASS_BUFFER_SEC) * 1000;
+      const shift = leaveBy - Date.parse(r.leaveAt);
+      const move = (iso) => new Date(Date.parse(iso) + shift).toISOString();
+      for (const l of r.legs) {
+        if (l.departAt) l.departAt = move(l.departAt);
+        if (l.arriveAt) l.arriveAt = move(l.arriveAt);
+      }
+      r.leaveBy = r.leaveAt = new Date(leaveBy).toISOString();
+      r.arriveAt = move(r.arriveAt);
+    }
   }
   unique.sort((a, b) => a.score - b.score);
 
   return {
-    origin, destination: dest, mode,
+    direction, from, to, mode,
+    destination: to,
+    arriveBy: arriveBy ? new Date(arriveBy).toISOString() : null,
+    classBufferMin: arriveBy ? CLASS_BUFFER_SEC / 60 : null,
     generatedAt: new Date(now).toISOString(),
     routes: unique.slice(0, 5),
   };
