@@ -3,6 +3,7 @@
 import { busStop, busStopsNear, subwayStation } from './_transit.js';
 import { findStation, searchPaths } from './_odsay.js';
 import profile from '../data/boarding_profile.json' with { type: 'json' };
+import subwayStats from '../data/subway_congestion.json' with { type: 'json' };
 
 // 정문 국민대앞(08107) 좌표. GPS가 없을 때 출발지로 사용
 export const MAIN_GATE = { lat: 37.6106795513, lng: 126.9940273315 };
@@ -146,7 +147,7 @@ async function busLeg(sp, atSec, now, arsOverride) {
   return leg;
 }
 
-async function subwayLeg(sp, atSec) {
+async function subwayLeg(sp, atSec, now) {
   const lane = sp.lane?.[0];
   const leg = {
     type: 'subway', line: lane?.name, from: sp.startName, to: sp.endName, way: sp.way,
@@ -173,8 +174,48 @@ async function subwayLeg(sp, atSec) {
     leg.waitSec = 180;
     leg.notes.push('도착 시점 열차는 아직 실시간 범위 밖 · 3분 대기로 추정');
   }
-  leg.notes.push('지하철 혼잡도 데이터 미연결');
+
+  // 서울교통공사 30분 단위 혼잡도 (평소 기준). 탑승역 값으로 좌석 판단, 지나가는 역 중 최댓값도 표시
+  const boardAt = new Date(now + (atSec + leg.waitSec) * 1000);
+  const passed = (sp.passStopList?.stations ?? []).slice(0, -1).map((s) => s.stationName);
+  const stations = passed.length ? passed : [sp.startName];
+  const pcts = stations.map((name) => ({ name, pct: subwayCongestion(lane, name, sp.wayCode, boardAt) }));
+  const board = pcts[0];
+  if (board?.pct != null) {
+    const peak = pcts.reduce((a, b) => ((b.pct ?? -1) > (a.pct ?? -1) ? b : a));
+    leg.congestionPct = board.pct;
+    leg.congestion = congestionLevel(board.pct);
+    leg.seatLikely = board.pct < SUBWAY_SEAT_PCT;
+    if (peak.pct > board.pct) leg.peak = { station: peak.name, pct: peak.pct, level: congestionLevel(peak.pct) };
+  } else {
+    leg.notes.push('혼잡도 통계 없음 (서울교통공사 1~8호선만 제공)');
+  }
   return leg;
+}
+
+// 혼잡도 % = 정원(칸당 160명) 대비 탑승 비율. 좌석 54석 ≈ 34%
+const SUBWAY_SEAT_PCT = 34;
+function congestionLevel(pct) {
+  if (pct < SUBWAY_SEAT_PCT) return '여유';
+  if (pct < 80) return '보통';
+  if (pct < 130) return '혼잡';
+  return '매우혼잡';
+}
+
+function subwayCongestion(lane, station, wayCode, date) {
+  const line = lane?.name?.match(/([1-8])호선/)?.[1];
+  if (!line) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23',
+  }).formatToParts(date).map((p) => [p.type, p.value]));
+  const day = parts.weekday === 'Sat' ? '토요일' : parts.weekday === 'Sun' ? '일요일' : '평일';
+  const slot = `${parts.hour.padStart(2, '0')}:${Number(parts.minute) < 30 ? '00' : '30'}`;
+  const idx = subwayStats.slots.indexOf(slot);
+  const dirs = subwayStats.data[day]?.[`${line}호선`]?.[station.replace(/역$/, '')];
+  if (idx < 0 || !dirs) return null;
+  // ODsay wayCode 1 = 상행·내선, 2 = 하행·외선
+  const values = wayCode === 1 ? dirs['상선'] ?? dirs['내선'] : dirs['하선'] ?? dirs['외선'];
+  return values?.[idx] ?? null;
 }
 
 // ODsay 경로 하나를 실시간으로 다시 계산
@@ -191,7 +232,7 @@ export async function evaluatePath(path, now, firstWalkOverride) {
     const isFirstRide = !legs.some((l) => l.type !== 'walk');
     const leg = sp.trafficType === 2
       ? await busLeg(sp, t, now, isFirstRide ? firstWalkOverride?.ars : undefined)
-      : await subwayLeg(sp, t);
+      : await subwayLeg(sp, t, now);
     leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
     t += leg.waitSec + leg.extraWaitSec + sp.sectionTime * 60;
     leg.arriveAt = new Date(now + t * 1000).toISOString();
@@ -243,7 +284,7 @@ export async function recommend({ origin, home, mode = 'fast', now = Date.now() 
     const first = r.legs.find((l) => l.type !== 'walk');
     if (first?.startsHere) r.tags.push('국민대에서 출발하는 차');
     const standingSec = r.legs
-      .filter((l) => l.type === 'bus' && l.seatLikely === false)
+      .filter((l) => l.type !== 'walk' && l.seatLikely === false)
       .reduce((s, l) => s + l.rideMin * 60, 0);
     r.standingMin = Math.round(standingSec / 60);
     // 편한 순: 서서 가는 시간 1분을 도착 0.5분 늦는 것과 같게 취급

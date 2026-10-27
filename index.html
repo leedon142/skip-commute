@@ -1326,7 +1326,11 @@
       const icon = l.type === 'bus' ? '🚌' : '🚇';
       const name = l.type === 'bus' ? `${escapeHtml(l.route)}번` : escapeHtml(l.line);
       const wait = `${Math.round(l.waitSec / 60)}분 대기${l.realtime ? '' : '(추정)'}`;
-      const crowd = l.type === 'bus' ? congestionBadge({ seconds: 0, ...l }) : '';
+      const crowd = l.type === 'bus'
+        ? congestionBadge({ seconds: 0, ...l })
+        : l.congestion
+          ? `${congestionBadge({ seconds: 0, congestion: l.congestion })} <span>평소 ${Math.round(l.congestionPct)}%</span>${l.peak ? ` <span>· ${escapeHtml(l.peak.station)}에서 ${Math.round(l.peak.pct)}%(${l.peak.level})</span>` : ''}`
+          : '';
       const seat = l.seatLikely === true ? '<span class="text-emerald-700 font-bold">착석 가능</span>'
         : l.seatLikely === false ? '<span class="text-rose-600 font-bold">서서 감</span>' : '';
       const miss = l.missProb >= 0.4 ? `<span class="text-rose-600 font-bold">못 탈 확률 ${Math.round(l.missProb * 100)}%</span>` : '';
