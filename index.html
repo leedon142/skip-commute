@@ -547,6 +547,10 @@
               <p class="text-[11px] text-slate-500 mb-3">
                 지금 정류장 대기 상황을 눌러 학우들의 경로 판단을 도와주세요!
               </p>
+              <div class="flex items-center justify-between mb-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
+                <span class="text-slate-500">제보 위치 <b id="report-stop" class="text-slate-800">확인 중…</b></span>
+                <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
+              </div>
               <div class="grid grid-cols-3 gap-2 text-xs">
                 <button onclick="submitReport('여유 (바로 탑승 가능)')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
                   <span class="text-sm">🟢</span>
@@ -1000,6 +1004,7 @@
       }
       if (tabIndex === 1) { loadHomeBriefing(); loadExitStatus(); }
       if (tabIndex === 2) renderTimetable();
+      if (tabIndex === 4) locateReportStop();
       if (tabIndex === 3) {
         loadLiveBoard();
         if (!document.getElementById('rec-results').children.length) runRecommend();
@@ -1682,19 +1687,54 @@
     }
 
     // Queue Report
-    function submitReport(statusText) {
+    // ---------------- 제보 위치 (GPS로 가장 가까운 정류장) + 같은 정류장 재제보 쿨타임 ----------------
+    const REPORT_COOLDOWN_MS = 5 * 60 * 1000;
+    let reportStop = null;
+
+    async function locateReportStop(force = false) {
+      if (reportStop && !force) return reportStop;
+      const label = document.getElementById('report-stop');
+      label.textContent = '확인 중…';
+      const pos = await getPosition();
+      if (!pos) {
+        reportStop = null;
+        label.textContent = '위치 권한이 필요해요';
+        return null;
+      }
+      try {
+        const res = await fetch(`/api/stops-near?lat=${pos.lat}&lng=${pos.lng}&radius=300`);
+        const stops = await res.json();
+        if (!res.ok) throw new Error(stops.error);
+        reportStop = stops.sort((a, b) => a.distM - b.distM)[0] || null;
+      } catch {
+        reportStop = null;
+      }
+      label.textContent = reportStop ? `${reportStop.name} (${reportStop.ars}) · ${reportStop.distM}m` : '300m 안에 정류장이 없어요';
+      return reportStop;
+    }
+
+    async function submitReport(statusText) {
+      const stop = await locateReportStop();
+      if (!stop) return triggerToast('정류장 근처에서만 제보할 수 있어요');
+      let last = {};
+      try { last = JSON.parse(localStorage.getItem('skip.lastReport')) || {}; } catch {}
+      const left = REPORT_COOLDOWN_MS - (Date.now() - (last[stop.ars] || 0));
+      if (left > 0) return triggerToast(`같은 정류장은 ${Math.ceil(left / 60000)}분 뒤에 다시 제보할 수 있어요`);
+      last[stop.ars] = Date.now();
+      try { localStorage.setItem('skip.lastReport', JSON.stringify(last)); } catch {}
+
       const list = document.getElementById('report-feed-list');
       const newReport = document.createElement('div');
       newReport.className = 'p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs';
       newReport.innerHTML = `
         <div class="flex items-center justify-between font-bold text-slate-800">
           <span class="flex items-center gap-1 text-blue-600">
-            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> 정문 셔틀 승차장
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> ${escapeHtml(stop.name)}
           </span>
           <span class="text-[10px] text-blue-600 font-semibold">방금 전 (내 제보)</span>
         </div>
         <p class="text-[11px] text-slate-700 mt-1">
-          현장 상태: "${statusText}" 제보가 성공적으로 등록되었습니다.
+          현장 상태: "${escapeHtml(statusText)}" 제보가 성공적으로 등록되었습니다.
         </p>
       `;
       list.prepend(newReport);
