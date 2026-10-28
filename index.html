@@ -485,10 +485,17 @@
                 <div class="px-3.5 pt-3 pb-2.5 space-y-2">
                   <div class="flex items-center justify-between">
                     <span class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
-                    <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
-                      <button id="rec-mode-fast" onclick="setRecMode('fast')" class="px-2 py-0.5 rounded-md bg-white text-blue-700 shadow-sm">빠른 순</button>
-                      <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="px-2 py-0.5 rounded-md text-slate-500">편한 순</button>
+                    <div class="flex items-center gap-1">
+                      <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-slate-400 hover:text-blue-600 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
+                      <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
+                        <button id="rec-mode-fast" onclick="setRecMode('fast')" class="px-2 py-0.5 rounded-md bg-white text-blue-700 shadow-sm">빠른 순</button>
+                        <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="px-2 py-0.5 rounded-md text-slate-500">편한 순</button>
+                      </div>
                     </div>
+                  </div>
+                  <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
+                    <div><b class="text-slate-800">빠른 순</b> · 지금 위치에서 걷는 시간, 실시간 버스·지하철 도착, 만차로 놓칠 확률까지 넣어 집에 가장 빨리 도착하는 경로부터 보여줘요.</div>
+                    <div><b class="text-slate-800">편한 순</b> · 서서 가는 시간이 짧은 경로부터 보여줘요. 버스는 실시간 혼잡도·탑승 인원으로, 지하철은 시간대별 평소 혼잡도로 앉을 수 있을지 추정해요. 서서 가는 1분을 1.5분처럼 계산해서, 몇 분 더 걸려도 앉아 갈 수 있으면 위로 올라와요.</div>
                   </div>
                   <button onclick="runRecommend()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
                     내 위치로 최적 경로 찾기
@@ -1671,6 +1678,23 @@
       }
     }
 
+    // 정류장별 펼침 상태는 기기에 저장. 처음엔 정문 길음·신설동 방면만 펼침
+    function boardOpenIds() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('skip.boardOpen'));
+        if (Array.isArray(saved)) return new Set(saved);
+      } catch {}
+      return new Set(['main-gate-east']);
+    }
+
+    function toggleBoardPlace(id, btn) {
+      const open = boardOpenIds();
+      open.has(id) ? open.delete(id) : open.add(id);
+      try { localStorage.setItem('skip.boardOpen', JSON.stringify([...open])); } catch {}
+      btn.nextElementSibling.classList.toggle('hidden');
+      btn.querySelector('i').classList.toggle('rotate-180');
+    }
+
     async function loadLiveBoard() {
       const box = document.getElementById('live-board');
       const stamp = document.getElementById('live-board-updated');
@@ -1684,12 +1708,18 @@
         const res = await fetch('/api/board');
         const board = await res.json();
         if (!res.ok) throw new Error(board.error || res.statusText);
+        const open = boardOpenIds();
         box.innerHTML = board.places.map((p) => `
           <div class="px-3.5 py-2">
-            <div class="text-[11px] font-bold text-blue-700 mb-1">${escapeHtml(p.label)}</div>
-            ${!p.ok
-              ? `<div class="text-rose-700">${escapeHtml(p.error)}</div>`
-              : p.type === 'bus' ? renderBusPlace(p) : renderSubwayPlace(p)}
+            <button onclick="toggleBoardPlace('${p.id}', this)" class="w-full flex items-center justify-between text-left text-[11px] font-bold text-blue-700">
+              <span>${escapeHtml(p.label)}</span>
+              <i class="ph-bold ph-caret-down shrink-0 ml-1 transition-transform ${open.has(p.id) ? 'rotate-180' : ''}"></i>
+            </button>
+            <div class="mt-1 ${open.has(p.id) ? '' : 'hidden'}">
+              ${!p.ok
+                ? `<div class="text-rose-700">${escapeHtml(p.error)}</div>`
+                : p.type === 'bus' ? renderBusPlace(p) : renderSubwayPlace(p)}
+            </div>
           </div>`).join('');
         stamp.textContent = new Date(board.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       } catch (e) {
