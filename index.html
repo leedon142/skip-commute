@@ -497,6 +497,20 @@
                     <div><b class="text-slate-800">빠른 순</b> · 지금 위치에서 걷는 시간, 실시간 버스·지하철 도착, 만차로 놓칠 확률까지 넣어 집에 가장 빨리 도착하는 경로부터 보여줘요.</div>
                     <div><b class="text-slate-800">편한 순</b> · 서서 가는 시간이 짧은 경로부터 보여줘요. 버스는 실시간 혼잡도·탑승 인원으로, 지하철은 시간대별 평소 혼잡도로 앉을 수 있을지 추정해요. 서서 가는 1분을 1.5분처럼 계산해서, 몇 분 더 걸려도 앉아 갈 수 있으면 위로 올라와요.</div>
                   </div>
+                  <div class="text-xs">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-slate-500 shrink-0">도착지</span>
+                      <button id="trip-home" onclick="clearTripDest()" class="px-2 py-1 rounded-lg font-bold bg-blue-600 text-white truncate tap-press">🏠 <span id="trip-home-name"></span></button>
+                      <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="px-2 py-1 rounded-lg font-bold bg-slate-100 text-slate-600 truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
+                    </div>
+                    <div id="trip-search" class="hidden mt-2 space-y-1.5">
+                      <div class="flex gap-1.5">
+                        <input id="trip-q" placeholder="가려는 곳 주소, 가게, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
+                        <button onclick="searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
+                      </div>
+                      <div id="trip-results" class="space-y-1"></div>
+                    </div>
+                  </div>
                   <button onclick="runRecommend()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
                     내 위치로 최적 경로 찾기
                   </button>
@@ -690,8 +704,8 @@
                   </div>
                   <div id="home-search" class="hidden mt-2 space-y-1.5">
                     <div class="flex gap-1.5">
-                      <input id="home-q" placeholder="도로명 주소, 아파트 이름, 역 이름" onkeydown="if (event.key === 'Enter') searchHome()" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
-                      <button onclick="searchHome()" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
+                      <input id="home-q" placeholder="도로명 주소, 아파트 이름, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('home-q', 'home-results', 'setHomePlace')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
+                      <button onclick="searchPlaces('home-q', 'home-results', 'setHomePlace')" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
                     </div>
                     <div id="home-results" class="space-y-1"></div>
                   </div>
@@ -1356,6 +1370,7 @@
       const params = {};
       if (pos) { params.lat = pos.lat; params.lng = pos.lng; }
       if (basis.at) params.at = basis.at;
+      if (tripDest) Object.assign(params, { homeLat: tripDest.lat.toFixed(4), homeLng: tripDest.lng.toFixed(4), homeName: tripDest.name });
       try {
         const data = await fetchRecommend(params);
         meta.textContent = `${basis.label} · ${pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준'} → ${destLabel(data.destination)}`;
@@ -1556,7 +1571,7 @@
       if (!file) return;
       const label = document.getElementById('tt-photo-label');
       const box = document.getElementById('tt-import');
-      label.textContent = '사진 읽는 중… (30초 정도 걸려요)';
+      label.textContent = '사진 읽는 중… (10~30초, 다른 탭 써도 돼요)';
       box.classList.add('hidden');
       try {
         const image = await shrinkImage(file);
@@ -1569,6 +1584,7 @@
         if (!res.ok) throw new Error(data.error);
         importedClasses = data.classes.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
         renderImportPreview();
+        triggerToast(`시간표에서 ${importedClasses.length}개 수업을 읽었어요. 시간표 탭에서 확인해 주세요`);
       } catch (e) {
         triggerToast(e.message || '사진을 읽지 못했어요');
       } finally {
@@ -1579,25 +1595,41 @@
     function renderImportPreview() {
       const box = document.getElementById('tt-import');
       box.classList.remove('hidden');
+      const field = 'px-1 py-0.5 rounded border border-slate-200 bg-white';
       box.innerHTML = `
-        <div class="font-bold text-amber-900 mb-1">사진에서 ${importedClasses.length}개 수업을 찾았어요. 맞는지 확인해 주세요</div>
-        <div class="space-y-1 max-h-56 overflow-y-auto">
+        <div class="font-bold text-amber-900 mb-1">사진에서 ${importedClasses.length}개 수업을 찾았어요. 시간이 맞는지 확인해 주세요</div>
+        <div class="space-y-1 max-h-72 overflow-y-auto">
           ${importedClasses.map((c, i) => `
-            <div class="flex items-center gap-1.5 p-1.5 rounded-lg bg-white border border-amber-100 text-[11px]">
-              <span class="font-bold text-slate-700 w-24 shrink-0">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
-              <span class="flex-1 truncate text-slate-900">${escapeHtml(c.name)}${c.room ? ` <span class="text-slate-400">${escapeHtml(c.room)}</span>` : ''}</span>
-              <button onclick="importedClasses.splice(${i}, 1); renderImportPreview()" class="text-slate-400 hover:text-rose-600">빼기</button>
+            <div class="p-1.5 rounded-lg bg-white border border-amber-100 text-[11px] space-y-1">
+              <div class="flex items-center gap-1">
+                <select onchange="editImported(${i}, 'day', Number(this.value))" class="${field}">
+                  ${[1, 2, 3, 4, 5, 6].map((d) => `<option value="${d}" ${d === c.day ? 'selected' : ''}>${DAY_NAMES[d]}</option>`).join('')}
+                </select>
+                <input type="time" value="${c.start}" onchange="editImported(${i}, 'start', this.value)" class="${field} w-[5.2rem]">
+                <span class="text-slate-400">-</span>
+                <input type="time" value="${c.end}" onchange="editImported(${i}, 'end', this.value)" class="${field} w-[5.2rem]">
+                <button onclick="importedClasses.splice(${i}, 1); renderImportPreview()" class="ml-auto text-slate-400 hover:text-rose-600 shrink-0">빼기</button>
+              </div>
+              <div class="flex gap-1">
+                <input value="${escapeHtml(c.name)}" onchange="editImported(${i}, 'name', this.value.trim())" class="${field} flex-1 min-w-0 font-bold">
+                <input value="${escapeHtml(c.room)}" placeholder="강의실" onchange="editImported(${i}, 'room', this.value.trim())" class="${field} w-24">
+              </div>
             </div>`).join('')}
         </div>
-        <div class="text-[10px] text-amber-800 mt-1.5">시간이 틀린 수업은 빼고 아래 '+ 수업 추가'로 직접 넣어 주세요.</div>
         <div class="grid grid-cols-2 gap-2 mt-2">
           <button onclick="document.getElementById('tt-import').classList.add('hidden')" class="py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-600 tap-press">취소</button>
           <button onclick="applyImportedTimetable()" class="py-1.5 rounded-lg bg-blue-600 text-white font-bold tap-press">이 시간표로 바꾸기</button>
         </div>`;
     }
 
+    function editImported(i, key, value) {
+      importedClasses[i][key] = value;
+    }
+
     function applyImportedTimetable() {
       if (!importedClasses.length) return triggerToast('저장할 수업이 없어요');
+      const bad = importedClasses.find((c) => !c.name || !c.start || !c.end || c.end <= c.start);
+      if (bad) return triggerToast(`${bad.name || '이름 없는 수업'}의 시간을 확인해 주세요`);
       timetable = importedClasses.map((c) => ({ ...c }));
       saveTimetable();
       document.getElementById('tt-import').classList.add('hidden');
@@ -1949,19 +1981,21 @@
       if (!box.classList.contains('hidden')) document.getElementById('home-q').focus();
     }
 
-    let homeResults = [];
+    // 주소·장소 검색 (/api/geocode, Kakao). 집 등록과 하교 도착지 검색이 같이 씀
+    const placeResults = {};
 
-    async function searchHome() {
-      const q = document.getElementById('home-q').value.trim();
-      const list = document.getElementById('home-results');
+    async function searchPlaces(inputId, listId, pickFn) {
+      const q = document.getElementById(inputId).value.trim();
+      const list = document.getElementById(listId);
       if (!q) return;
       list.innerHTML = '<div class="text-[11px] text-slate-400">찾는 중…</div>';
       try {
         const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-        homeResults = await res.json();
-        if (!res.ok) throw new Error(homeResults.error);
-        list.innerHTML = homeResults.map((r, i) => `
-          <button onclick="setHomePlace(${i})" class="w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-blue-50 tap-press">
+        const results = await res.json();
+        if (!res.ok) throw new Error(results.error);
+        placeResults[listId] = results;
+        list.innerHTML = results.map((r, i) => `
+          <button onclick="${pickFn}(${i})" class="w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-blue-50 tap-press">
             <div class="font-bold text-slate-800 truncate">${escapeHtml(r.name)}</div>
             <div class="text-[10px] text-slate-500 truncate">${escapeHtml(r.address)}</div>
           </button>`).join('') || '<div class="text-[11px] text-slate-500">결과가 없어요. 도로명 주소로 다시 찾아 주세요.</div>';
@@ -1970,8 +2004,39 @@
       }
     }
 
+    // 오늘만 다른 곳으로 가는 도착지. 저장하지 않고 앱을 다시 열면 집으로 돌아감
+    let tripDest = null;
+
+    function renderTripDest() {
+      document.getElementById('trip-home-name').textContent = homeDestination;
+      document.getElementById('trip-other-name').textContent = tripDest ? tripDest.name : '다른 곳';
+      const on = ['bg-blue-600', 'text-white'], off = ['bg-slate-100', 'text-slate-600'];
+      for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) {
+        const el = document.getElementById(id);
+        el.classList.remove(...on, ...off);
+        el.classList.add(...(active ? on : off));
+      }
+    }
+
+    function setTripDest(i) {
+      const r = placeResults['trip-results'][i];
+      tripDest = { name: r.name, lat: r.lat, lng: r.lng };
+      document.getElementById('trip-search').classList.add('hidden');
+      document.getElementById('trip-results').innerHTML = '';
+      document.getElementById('trip-q').value = '';
+      renderTripDest();
+      runRecommend();
+    }
+
+    function clearTripDest() {
+      if (!tripDest) return;
+      tripDest = null;
+      renderTripDest();
+      runRecommend();
+    }
+
     function setHomePlace(i) {
-      const r = homeResults[i];
+      const r = placeResults['home-results'][i];
       homePlace = { name: r.name, address: r.address, lat: r.lat, lng: r.lng };
       homeDestination = r.name;
       try {
@@ -1984,6 +2049,7 @@
       document.getElementById('home-results').innerHTML = '';
       document.getElementById('home-q').value = '';
       triggerToast(`귀가 목적지를 ${r.name}(으)로 바꿨어요.`);
+      renderTripDest();
       loadHomeBriefing();
     }
 
@@ -2002,6 +2068,7 @@
 
     document.getElementById('home-card-dest').innerText = homeDestination;
     document.getElementById('my-current-dest-txt').innerText = homeDestination;
+    renderTripDest();
     renderTimetable();
     loadHomeBriefing();
     loadExitStatus();

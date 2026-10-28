@@ -2,8 +2,13 @@
 // 사진은 저장하지 않고 바로 Gemini에 넘긴 뒤 결과만 돌려줌. 저장은 사용자가 확인한 뒤 기기(localStorage)에.
 import { requireEnv, HttpError, json } from './_lib.js';
 
-// 무료 키는 '요청 폭주(503)'가 자주 나서 다음 모델로 넘어감
-const MODELS = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+// 무료 키는 '요청 폭주(503)'가 자주 나서 다음 모델로 넘어감.
+// 사진 해상도를 낮추면 20초 → 3~5초. 가끔 시간 하나가 틀려서 확인 화면에서 직접 고치게 함
+const MODELS = [
+  ['gemini-3.5-flash', 'minimal'],
+  ['gemini-3.8-flash', 'low'],
+  ['gemini-flash-latest', 'low'],
+];
 const MAX_BASE64 = 4_000_000; // Vercel 요청 본문 4.5MB 제한 안쪽
 
 const PROMPT = `대학교 시간표 사진이야. 모든 수업 칸을 빠짐없이 읽어서 목록으로 만들어.
@@ -44,15 +49,18 @@ export async function POST(request) {
     if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) throw new HttpError(400, 'JPG·PNG 사진만 돼요');
 
     let res, data;
-    for (const model of MODELS) {
+    for (const [model, thinkingLevel] of MODELS) {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': requireEnv('GEMINI_API_KEY') },
         body: JSON.stringify({
           contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: image } }, { text: PROMPT }] }],
-          generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: 'medium' } },
+          generationConfig: {
+            responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0,
+            mediaResolution: 'MEDIA_RESOLUTION_LOW', thinkingConfig: { thinkingLevel },
+          },
         }),
-        signal: AbortSignal.timeout(90_000),
+        signal: AbortSignal.timeout(45_000),
       });
       data = await res.json();
       if (res.ok || (res.status < 500 && res.status !== 404)) break;
