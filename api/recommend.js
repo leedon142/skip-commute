@@ -1,5 +1,6 @@
 // GET /api/recommend — 경로 추천
-//   home=화곡                 집 근처 역 이름 (필수)
+//   home=화곡                 집 근처 역 이름
+//   homeLat, homeLng, homeName  상세주소로 등록한 집 좌표 (home 대신)
 //   direction=home|school     하교(기본) / 등교
 //   lat, lng                  하교 출발 위치 (없으면 정문)
 //   at=<epoch ms>             하교: 이 시각에 출발 (수업 끝나는 시각 등)
@@ -10,8 +11,12 @@ import { recommend, MAIN_GATE } from './_engine.js';
 
 export const GET = handle(async (url) => {
   const q = url.searchParams;
-  const home = q.get('home');
-  if (!home) throw new HttpError(400, 'home(집 근처 역 이름)이 필요해요');
+  const homeLat = Number(q.get('homeLat'));
+  const homeLng = Number(q.get('homeLng'));
+  const home = homeLat && homeLng
+    ? { lat: homeLat, lng: homeLng, name: (q.get('homeName') || '집').slice(0, 40) }
+    : q.get('home');
+  if (!home) throw new HttpError(400, 'home(집 근처 역 이름) 또는 homeLat·homeLng가 필요해요');
   const lat = Number(q.get('lat'));
   const lng = Number(q.get('lng'));
   const origin = lat && lng ? { lat, lng, source: 'gps' } : { ...MAIN_GATE, source: 'main-gate' };

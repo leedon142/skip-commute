@@ -676,15 +676,22 @@
                   </div>
                 </div>
                 <div>
-                  <div class="text-[10px] text-slate-400 font-semibold">귀가 목적지 (상세 주소 대신 하차 거점역 등록)</div>
+                  <div class="text-[10px] text-slate-400 font-semibold">귀가 목적지 (집 주소 또는 역)</div>
                   <div class="flex items-center justify-between mt-0.5">
                     <span id="my-current-dest-txt" class="font-bold text-slate-800">연신내역</span>
                     <button onclick="openEditDestModal()" class="text-blue-600 font-bold text-xs tap-press">수정</button>
                   </div>
+                  <div id="home-search" class="hidden mt-2 space-y-1.5">
+                    <div class="flex gap-1.5">
+                      <input id="home-q" placeholder="도로명 주소, 아파트 이름, 역 이름" onkeydown="if (event.key === 'Enter') searchHome()" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
+                      <button onclick="searchHome()" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
+                    </div>
+                    <div id="home-results" class="space-y-1"></div>
+                  </div>
                 </div>
                 <div class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 flex items-start gap-1.5">
                   <i class="ph-bold ph-shield-check text-base text-emerald-600 shrink-0 mt-0.5"></i>
-                  <span>개인정보 보호: 상세 동/호수는 수집하지 않으며 모든 시간표 및 좌표는 스마트폰 기기 로컬에만 보관됩니다.</span>
+                  <span>개인정보 보호: 동/호수는 넣지 마세요. 집은 좌표로만 기기에 저장되고, 길찾기할 때만 약 100m 단위로 서버에 보내집니다.</span>
                 </div>
               </div>
             </div>
@@ -818,6 +825,8 @@
 
     let currentUniv = UNIVERSITIES[0]; // 국민대학교
     let homeDestination = (() => { try { return localStorage.getItem('skip.home') || '연신내역'; } catch { return '연신내역'; } })();
+    // 상세주소로 등록한 집 { name, address, lat, lng }. 없으면 homeDestination을 역 이름으로 사용
+    let homePlace = (() => { try { return JSON.parse(localStorage.getItem('skip.homePlace')); } catch { return null; } })();
     let isFeedExpanded = false;
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -1098,6 +1107,17 @@
       return homeDestination.match(/^\s*(\S+?)역/)?.[1] ?? homeDestination.split(/\s/)[0];
     }
 
+    function homeParams() {
+      if (!homePlace) return { home: homeStationName() };
+      // 좌표는 소수 넷째 자리(약 10m)까지만 보냄
+      return { homeLat: homePlace.lat.toFixed(4), homeLng: homePlace.lng.toFixed(4), homeName: homePlace.name };
+    }
+
+    // 추천 결과의 목적지 표시 이름: 역이면 "연신내역", 주소면 등록한 이름
+    function destLabel(dest) {
+      return dest.kind === 'station' ? `${dest.name}역` : dest.name;
+    }
+
     function getPosition() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) return resolve(null);
@@ -1142,7 +1162,7 @@
 
     // 추천 API 호출. 같은 조건은 1분 동안 재사용해서 ODsay 호출 절약
     async function fetchRecommend(params = {}) {
-      const qs = new URLSearchParams({ home: homeStationName(), mode: recMode, ...params });
+      const qs = new URLSearchParams({ ...homeParams(), mode: recMode, ...params });
       const key = `skip.rec:${qs}`;
       try {
         const hit = JSON.parse(sessionStorage.getItem(key) || 'null');
@@ -1331,8 +1351,8 @@
       if (basis.at) params.at = basis.at;
       try {
         const data = await fetchRecommend(params);
-        meta.textContent = `${basis.label} · ${pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준'} → ${data.destination.name}역`;
-        box.innerHTML = renderRoutes(data.routes, { dest: `${data.destination.name}역` });
+        meta.textContent = `${basis.label} · ${pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준'} → ${destLabel(data.destination)}`;
+        box.innerHTML = renderRoutes(data.routes, { dest: destLabel(data.destination) });
       } catch (e) {
         meta.textContent = '';
         box.innerHTML = `<div class="p-3 text-rose-700">추천 실패: ${escapeHtml(e.message)}</div>`;
@@ -1357,7 +1377,7 @@
         const [top, second] = data.routes;
         if (!top) throw new Error('경로를 찾지 못했어요');
         const first = top.legs.find((l) => l.type !== 'walk');
-        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천<br>${hhmm(top.arriveAt)} ${escapeHtml(data.destination.name)}역 도착`;
+        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천<br>${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
 
         const reasons = [];
         const risky = data.routes.flatMap((r) => r.legs).find((l) => l.type === 'bus' && (l.full || l.missProb >= 0.4));
@@ -1894,15 +1914,47 @@
     }
 
     function openEditDestModal() {
-      const newDest = prompt('새로운 귀가 목적지(하차 거점 역)를 입력하세요:', homeDestination);
-      if (newDest && newDest.trim()) {
-        homeDestination = newDest.trim();
-        try { localStorage.setItem('skip.home', homeDestination); } catch {}
-        document.getElementById('home-card-dest').innerText = homeDestination;
-        document.getElementById('my-current-dest-txt').innerText = homeDestination;
-        triggerToast('귀가 목적지 거점이 수정되었습니다.');
-        loadHomeBriefing();
+      const box = document.getElementById('home-search');
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) document.getElementById('home-q').focus();
+    }
+
+    let homeResults = [];
+
+    async function searchHome() {
+      const q = document.getElementById('home-q').value.trim();
+      const list = document.getElementById('home-results');
+      if (!q) return;
+      list.innerHTML = '<div class="text-[11px] text-slate-400">찾는 중…</div>';
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+        homeResults = await res.json();
+        if (!res.ok) throw new Error(homeResults.error);
+        list.innerHTML = homeResults.map((r, i) => `
+          <button onclick="setHomePlace(${i})" class="w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-blue-50 tap-press">
+            <div class="font-bold text-slate-800 truncate">${escapeHtml(r.name)}</div>
+            <div class="text-[10px] text-slate-500 truncate">${escapeHtml(r.address)}</div>
+          </button>`).join('') || '<div class="text-[11px] text-slate-500">결과가 없어요. 도로명 주소로 다시 찾아 주세요.</div>';
+      } catch (e) {
+        list.innerHTML = `<div class="text-[11px] text-rose-600">${escapeHtml(e.message || '검색에 실패했어요')}</div>`;
       }
+    }
+
+    function setHomePlace(i) {
+      const r = homeResults[i];
+      homePlace = { name: r.name, address: r.address, lat: r.lat, lng: r.lng };
+      homeDestination = r.name;
+      try {
+        localStorage.setItem('skip.homePlace', JSON.stringify(homePlace));
+        localStorage.setItem('skip.home', homeDestination);
+      } catch {}
+      document.getElementById('home-card-dest').innerText = homeDestination;
+      document.getElementById('my-current-dest-txt').innerText = homeDestination;
+      document.getElementById('home-search').classList.add('hidden');
+      document.getElementById('home-results').innerHTML = '';
+      document.getElementById('home-q').value = '';
+      triggerToast(`귀가 목적지를 ${r.name}(으)로 바꿨어요.`);
+      loadHomeBriefing();
     }
 
     function triggerToast(msg) {

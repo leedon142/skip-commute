@@ -297,8 +297,11 @@ const MORNING_PROBE_SEC = 100 * 60;
 
 // direction 'home': origin(학교/GPS) → 집,  'school': 집 → origin 자리에 정문
 // departAt: 이 시각에 출발 (기본 지금), arriveBy: 이 시각까지 도착 (등교)
+// home: 역 이름("연신내") 또는 상세주소 좌표 { name, lat, lng }
 export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, now = Date.now() }) {
-  const homeStation = await findStation(home);
+  const homeStation = typeof home === 'string'
+    ? { ...(await findStation(home)), kind: 'station' }
+    : { ...home, kind: 'address' };
   const [from, to] = direction === 'school'
     ? [homeStation, { ...MAIN_GATE, name: '국민대 정문' }]
     : [origin, homeStation];
