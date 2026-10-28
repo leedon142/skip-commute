@@ -741,6 +741,14 @@
                     <div id="home-results" class="space-y-1"></div>
                   </div>
                 </div>
+                <div>
+                  <div class="text-[10px] text-slate-400 font-semibold">내 걸음 속도</div>
+                  <div class="flex items-center justify-between mt-0.5">
+                    <span id="my-walk-pace" class="font-bold text-slate-800">아직 측정 안 됨</span>
+                    <button onclick="resetWalkSamples()" class="text-slate-400 hover:text-rose-600 font-bold text-xs tap-press">초기화</button>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">하교 경로에서 '이 경로로 출발'을 누르고 걸으면, 정류장 근처에서 GPS로 자동 측정해 내 걸음에 맞춰요.</div>
+                </div>
                 <div class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 flex items-start gap-1.5">
                   <i class="ph-bold ph-shield-check text-base text-emerald-600 shrink-0 mt-0.5"></i>
                   <span>개인정보 보호: 동/호수는 넣지 마세요. 집은 좌표로만 기기에 저장되고, 길찾기할 때만 약 100m 단위로 서버에 보내집니다.</span>
@@ -766,6 +774,17 @@
             </div>
           </div>
 
+        </div>
+
+        <!-- 걷는 중: 정류장에 도착하면 '도착'을 눌러 내 걸음 속도 측정 -->
+        <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
+          <i class="ph-bold ph-person-simple-walk text-cyan-300 text-base"></i>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold truncate"><span id="walk-trip-to"></span>까지 걷는 중</div>
+            <div class="text-[10px] text-slate-300">경과 <span id="walk-trip-elapsed" class="font-mono">0:00</span> · 예상 <span id="walk-trip-expected"></span> · <span id="walk-trip-gps">GPS 대기</span></div>
+          </div>
+          <button onclick="cancelWalkTrip()" class="px-2 py-1 rounded-lg text-slate-300 font-bold tap-press">취소</button>
+          <button onclick="finishWalkTrip()" class="px-3 py-1.5 rounded-lg bg-cyan-400 text-slate-900 font-extrabold tap-press">도착</button>
         </div>
 
         <!-- ================= 5-TAB BOTTOM NAVIGATION ================= -->
@@ -1244,7 +1263,7 @@
 
     async function fetchRecommend(params = {}) {
       if (!hasHome() && !params.homeLat) throw new Error('먼저 내 정보에서 집을 등록해 주세요.');
-      const qs = new URLSearchParams({ ...homeParams(), mode: recMode, ...params });
+      const qs = new URLSearchParams({ ...homeParams(), mode: recMode, walkFactor: walkFactor().toFixed(2), ...params });
       const key = `skip.rec:${qs}`;
       try {
         const hit = JSON.parse(sessionStorage.getItem(key) || 'null');
@@ -1354,7 +1373,13 @@
         </li>`;
     }
 
-    function renderRouteDetail(r, dest) {
+    function renderRouteDetail(r, dest, i, morning) {
+      const firstWalk = r.legs[0]?.type === 'walk' && r.legs[0].to ? r.legs[0] : null;
+      const startButton = !morning && firstWalk
+        ? `<button onclick="startWalkTrip(${i})" class="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 tap-press">
+             <i class="ph-bold ph-person-simple-walk"></i> 이 경로로 출발 · ${escapeHtml(firstWalk.to)}까지 걸음 측정
+           </button>`
+        : '';
       const rides = r.legs.filter((l) => l.type !== 'walk');
       const walkMin = r.legs.filter((l) => l.type === 'walk').reduce((a, l) => a + l.minutes, 0);
       const items = r.legs.map((l) => l.type === 'walk'
@@ -1378,10 +1403,14 @@
               <span class="font-bold text-slate-800">${escapeHtml(dest)} 도착</span>
             </li>
           </ol>
+          ${startButton}
         </div>`;
     }
 
+    let lastRoutes = [];
+
     function renderRoutes(routes, { morning = false, dest = '' } = {}) {
+      if (!morning) lastRoutes = routes;
       return routes.map((r, i) => `
           <div class="px-3.5 py-2.5 ${i === 0 ? 'bg-blue-50/60' : ''}">
             <div onclick="toggleRoute(this)" class="space-y-1.5 cursor-pointer">
@@ -1396,7 +1425,7 @@
                 <span class="text-[10px] text-slate-400 ml-1">눌러서 자세히</span>
               </div>
             </div>
-            ${renderRouteDetail(r, dest)}
+            ${renderRouteDetail(r, dest, i, morning)}
           </div>`).join('') || '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
     }
 
@@ -2178,6 +2207,122 @@
       triggerToast('귀가 목적지를 지웠어요. 새 집을 등록해 주세요.');
     }
 
+    // ---------------- 내 걸음 속도 (출발 → 정류장 '도착' 버튼으로 실측, 기기에만 저장) ----------------
+    // 처음엔 지도 보행 경로 시간 그대로, 측정이 쌓이면 '실제 ÷ 지도' 비율의 중앙값을 모든 도보 구간에 곱함
+    const WALK_SAMPLES_KEY = 'skip.walkSamples';
+    const WALK_TRIP_KEY = 'skip.walkTrip';
+    let walkTripTimer = null;
+
+    function walkSamples() {
+      try { return JSON.parse(localStorage.getItem(WALK_SAMPLES_KEY)) || []; } catch { return []; }
+    }
+
+    function walkFactor() {
+      const ratios = walkSamples().map((x) => x.measuredSec / x.baseSec).sort((a, b) => a - b);
+      if (!ratios.length) return 1;
+      const mid = Math.floor(ratios.length / 2);
+      const median = ratios.length % 2 ? ratios[mid] : (ratios[mid - 1] + ratios[mid]) / 2;
+      return Math.min(2, Math.max(0.5, median));
+    }
+
+    function renderWalkPace() {
+      const n = walkSamples().length;
+      const f = walkFactor();
+      document.getElementById('my-walk-pace').textContent = n
+        ? `지도 기준 ${f.toFixed(2)}배 · ${f > 1.05 ? '느긋한 편' : f < 0.95 ? '빠른 편' : '보통'} (측정 ${n}회)`
+        : '아직 측정 안 됨 (지도 기준)';
+    }
+
+    function fmtElapsed(sec) {
+      return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+    }
+
+    function activeWalkTrip() {
+      try { return JSON.parse(localStorage.getItem(WALK_TRIP_KEY)); } catch { return null; }
+    }
+
+    // 걷는 동안 GPS로 정류장까지 남은 거리를 보다가, 가까워지면 자동으로 '도착' 처리
+    // (웹앱이라 화면이 켜져 있고 앱이 앞에 있을 때만 위치를 받을 수 있음)
+    const ARRIVE_RADIUS_M = 25;
+    let walkWatchId = null;
+
+    function metersBetween(a, b) {
+      const R = 6371000, rad = Math.PI / 180;
+      const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function watchWalkArrival(trip) {
+      if (walkWatchId != null) navigator.geolocation.clearWatch(walkWatchId);
+      walkWatchId = null;
+      const label = document.getElementById('walk-trip-gps');
+      if (!trip?.toPos || !navigator.geolocation) {
+        label.textContent = '정류장에서 도착을 눌러 주세요';
+        return;
+      }
+      walkWatchId = navigator.geolocation.watchPosition((p) => {
+        const d = metersBetween({ lat: p.coords.latitude, lng: p.coords.longitude }, trip.toPos);
+        // GPS 오차가 크면 그만큼 넓게 보되, 60m 넘게는 안 봄
+        const radius = Math.min(60, Math.max(ARRIVE_RADIUS_M, p.coords.accuracy));
+        label.textContent = `남은 거리 ${Math.round(d)}m`;
+        if (d <= radius) finishWalkTrip(true);
+      }, () => {
+        label.textContent = 'GPS 안 됨 · 도착을 눌러 주세요';
+      }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+    }
+
+    function showWalkTripBar() {
+      const trip = activeWalkTrip();
+      const bar = document.getElementById('walk-trip-bar');
+      clearInterval(walkTripTimer);
+      watchWalkArrival(trip);
+      if (!trip) return bar.classList.add('hidden');
+      bar.classList.remove('hidden');
+      document.getElementById('walk-trip-to').textContent = trip.to;
+      document.getElementById('walk-trip-expected').textContent = `${Math.max(1, Math.round(trip.expectedSec / 60))}분`;
+      const tick = () => { document.getElementById('walk-trip-elapsed').textContent = fmtElapsed((Date.now() - trip.startAt) / 1000); };
+      tick();
+      walkTripTimer = setInterval(tick, 1000);
+    }
+
+    function startWalkTrip(i) {
+      const walk = lastRoutes[i]?.legs[0];
+      if (walk?.type !== 'walk' || !walk.baseSec) return;
+      const trip = { startAt: Date.now(), to: walk.to, toPos: walk.toPos, baseSec: walk.baseSec, expectedSec: walk.sec };
+      try { localStorage.setItem(WALK_TRIP_KEY, JSON.stringify(trip)); } catch {}
+      showWalkTripBar();
+      triggerToast(`${walk.to} 근처에 오면 자동으로 측정을 끝내요. 화면은 켜 둬 주세요.`);
+    }
+
+    function cancelWalkTrip() {
+      try { localStorage.removeItem(WALK_TRIP_KEY); } catch {}
+      showWalkTripBar();
+    }
+
+    function finishWalkTrip(auto = false) {
+      const trip = activeWalkTrip();
+      cancelWalkTrip();
+      if (!trip) return;
+      const measuredSec = Math.round((Date.now() - trip.startAt) / 1000);
+      // 너무 짧거나(바로 누름) 너무 길면(중간에 딴 데 들름) 버림
+      const ratio = measuredSec / trip.baseSec;
+      if (measuredSec < 20 || ratio < 0.4 || ratio > 2.5) {
+        return triggerToast(`이번 기록(${fmtElapsed(measuredSec)})은 평소 걸음과 너무 달라서 저장하지 않았어요.`);
+      }
+      // 최근 20번만 사용
+      const samples = [...walkSamples(), { at: Date.now(), to: trip.to, baseSec: trip.baseSec, measuredSec }].slice(-20);
+      try { localStorage.setItem(WALK_SAMPLES_KEY, JSON.stringify(samples)); } catch {}
+      renderWalkPace();
+      triggerToast(`${auto ? `${trip.to} 도착! ` : ''}예상 ${fmtElapsed(trip.expectedSec)} → 실제 ${fmtElapsed(measuredSec)}. 내 걸음 속도(${walkFactor().toFixed(2)}배)에 반영했어요.`);
+    }
+
+    function resetWalkSamples() {
+      try { localStorage.removeItem(WALK_SAMPLES_KEY); } catch {}
+      renderWalkPace();
+      triggerToast('걸음 속도 기록을 지웠어요. 다시 지도 기준으로 계산해요.');
+    }
+
     function triggerToast(msg) {
       const toast = document.getElementById('app-toast');
       const toastText = document.getElementById('app-toast-text');
@@ -2192,6 +2337,8 @@
     }
 
     renderHomeName();
+    renderWalkPace();
+    showWalkTripBar();
     renderTimetable();
     loadHomeBriefing();
     loadExitStatus();

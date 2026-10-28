@@ -245,18 +245,21 @@ function subwayCongestion(lane, station, wayCode, date) {
 }
 
 // ODsay 경로 하나를 실시간으로 다시 계산
-export async function evaluatePath(path, now, firstWalkOverride, startSec = 0) {
+// walkFactor: 사용자 걸음 속도 배율 (도착 버튼으로 잰 실제 시간 ÷ 지도 시간). 1.2면 지도보다 20% 느림
+export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, walkFactor = 1) {
   const legs = [];
   // startSec: 지금부터 몇 초 뒤에 출발하는지. 실시간 도착 정보는 항상 '지금' 기준이라 같은 시간축에서 계산
   let t = startSec;
   for (const [idx, sp] of path.subPath.entries()) {
     if (sp.trafficType === 3) {
-      const sec = idx === 0 && firstWalkOverride ? firstWalkOverride.sec : sp.sectionTime * 60;
+      const baseSec = idx === 0 && firstWalkOverride ? firstWalkOverride.sec : sp.sectionTime * 60;
+      const sec = Math.round(baseSec * walkFactor);
       if (sec > 0) {
         const overridden = !!firstWalkOverride && idx === 0;
         legs.push({
-          type: 'walk', minutes: Math.round(sec / 60), estimated: overridden && firstWalkOverride.source !== 'osm',
+          type: 'walk', sec, baseSec, minutes: Math.round(sec / 60), estimated: overridden && firstWalkOverride.source !== 'osm',
           to: overridden ? firstWalkOverride.to : null,
+          toPos: overridden ? firstWalkOverride.toPos ?? null : null,
           distanceM: overridden ? firstWalkOverride.distanceM ?? null : sp.distance ?? null,
           startAt: new Date(now + t * 1000).toISOString(),
         });
@@ -292,7 +295,7 @@ export async function upstreamVariant(path, origin, nearStops) {
   if (!prevStop) return null;
   const d = distM(origin, prevStop);
   if (d > MAX_UPSTREAM_WALK_M) return null;
-  return { ...(await walkBetween(origin, prevStop)), ars: prevStop.ars, to: prevStop.name };
+  return { ...(await walkBetween(origin, prevStop)), ars: prevStop.ars, to: prevStop.name, toPos: { lat: prevStop.lat, lng: prevStop.lng } };
 }
 
 function signature(r) {
@@ -307,7 +310,7 @@ const MORNING_PROBE_SEC = 100 * 60;
 // direction 'home': origin(학교/GPS) → 집,  'school': 집 → origin 자리에 정문
 // departAt: 이 시각에 출발 (기본 지금), arriveBy: 이 시각까지 도착 (등교)
 // home: 역 이름("연신내") 또는 상세주소 좌표 { name, lat, lng }
-export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, now = Date.now() }) {
+export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, walkFactor = 1, now = Date.now() }) {
   const homeStation = typeof home === 'string'
     ? { ...(await findStation(home)), kind: 'station' }
     : { ...home, kind: 'address' };
@@ -336,15 +339,15 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     const first = path.subPath.find((sp) => sp.trafficType !== 3);
     if (!first?.startY) return null;
     const stop = { lat: Number(first.startY), lng: Number(first.startX) };
-    return { ...(await walkBetween(origin, stop)), to: first.startName };
+    return { ...(await walkBetween(origin, stop)), to: first.startName, toPos: stop };
   };
 
   // 등교는 첫 계산으로 소요 시간을 구한 뒤, 실제 출발 시각으로 한 번 더 계산 (혼잡도 시간대·실시간 반영)
   const run = async (path, variant, tags) => {
-    let r = await evaluatePath(path, now, variant, startSec);
+    let r = await evaluatePath(path, now, variant, startSec, walkFactor);
     if (arriveBy) {
       const refined = Math.max(0, Math.round((arriveBy - now) / 1000 - r.totalSec - CLASS_BUFFER_SEC));
-      r = await evaluatePath(path, now, variant, refined);
+      r = await evaluatePath(path, now, variant, refined, walkFactor);
     }
     return { ...r, tags };
   };

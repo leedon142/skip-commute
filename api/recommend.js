@@ -6,6 +6,7 @@
 //   at=<epoch ms>             하교: 이 시각에 출발 (수업 끝나는 시각 등)
 //   arriveBy=<epoch ms>       등교: 이 시각까지 도착 (첫 수업 시작)
 //   mode=fast|comfort
+//   walkFactor=1.2            내 걸음 속도 배율 (기기에서 잰 값, 0.5~2)
 import { handle, HttpError } from './_lib.js';
 import { recommend, MAIN_GATE } from './_engine.js';
 
@@ -27,5 +28,6 @@ export const GET = handle(async (url) => {
     mode: q.get('mode') === 'comfort' ? 'comfort' : 'fast',
     departAt: Number(q.get('at')) || undefined,
     arriveBy: Number(q.get('arriveBy')) || undefined,
+    walkFactor: Math.min(2, Math.max(0.5, Number(q.get('walkFactor')) || 1)),
   });
 });
