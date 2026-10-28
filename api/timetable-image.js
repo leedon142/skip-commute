@@ -2,7 +2,8 @@
 // 사진은 저장하지 않고 바로 Gemini에 넘긴 뒤 결과만 돌려줌. 저장은 사용자가 확인한 뒤 기기(localStorage)에.
 import { requireEnv, HttpError, json } from './_lib.js';
 
-const MODEL = 'gemini-3.5-flash';
+// 무료 키는 '요청 폭주(503)'가 자주 나서 다음 모델로 넘어감
+const MODELS = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
 const MAX_BASE64 = 4_000_000; // Vercel 요청 본문 4.5MB 제한 안쪽
 
 const PROMPT = `대학교 시간표 사진이야. 모든 수업 칸을 빠짐없이 읽어서 목록으로 만들어.
@@ -42,20 +43,24 @@ export async function POST(request) {
     if (image.length > MAX_BASE64) throw new HttpError(413, '사진이 너무 커요');
     if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) throw new HttpError(400, 'JPG·PNG 사진만 돼요');
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': requireEnv('GEMINI_API_KEY') },
-      body: JSON.stringify({
-        contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: image } }, { text: PROMPT }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: 'medium' } },
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    const data = await res.json();
+    let res, data;
+    for (const model of MODELS) {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': requireEnv('GEMINI_API_KEY') },
+        body: JSON.stringify({
+          contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: image } }, { text: PROMPT }] }],
+          generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: 'medium' } },
+        }),
+        signal: AbortSignal.timeout(90_000),
+      });
+      data = await res.json();
+      if (res.ok || (res.status < 500 && res.status !== 404)) break;
+    }
     if (!res.ok) {
       throw new HttpError(res.status === 429 ? 429 : 502, res.status === 429
         ? '사진 인식 무료 한도를 잠깐 넘었어요. 1분 뒤에 다시 해 주세요.'
-        : `사진 인식 오류: ${data.error?.message || res.status}`);
+        : res.status === 503 ? '사진 인식 서버가 붐벼요. 잠시 뒤에 다시 해 주세요.' : `사진 인식 오류: ${data.error?.message || res.status}`);
     }
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '{}';
     const classes = (JSON.parse(text).classes || [])
