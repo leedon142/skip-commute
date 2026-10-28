@@ -1,4 +1,4 @@
-// 로컬 개발 서버: index.html 제공 + /api/* 를 api/*.js 의 GET 핸들러로 연결
+// 로컬 개발 서버: index.html 제공 + /api/* 를 api/*.js 의 GET/POST 핸들러로 연결
 // 실행: node server.js  (휴대폰은 같은 와이파이에서 http://<PC IP>:3000)
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -19,8 +19,10 @@ createServer(async (req, res) => {
       const name = url.pathname.slice(5).replace(/[^a-z0-9-]/gi, '');
       const file = join(ROOT, 'api', `${name}.js`);
       if (!name || name.startsWith('_') || !existsSync(file)) return send(res, 404, 'not found');
-      const { GET } = await import(`./api/${name}.js`);
-      const response = await GET(new Request(url));
+      const handler = (await import(`./api/${name}.js`))[req.method];
+      if (!handler) return send(res, 405, 'method not allowed');
+      const body = req.method === 'POST' ? Buffer.concat(await Array.fromAsync(req)) : undefined;
+      const response = await handler(new Request(url, { method: req.method, headers: req.headers, body }));
       res.writeHead(response.status, Object.fromEntries(response.headers));
       return res.end(await response.text());
     }

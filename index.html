@@ -430,6 +430,13 @@
                 수업 종료 시점 및 강의동 위치를 기준으로 하교 알림이 자동 동기화됩니다.
               </p>
 
+              <!-- 시간표 사진으로 등록 (Gemini) -->
+              <label class="mb-3 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 text-blue-700 text-xs font-bold cursor-pointer tap-press">
+                <i class="ph-bold ph-camera"></i> <span id="tt-photo-label">시간표 사진으로 등록</span>
+                <input id="tt-photo" type="file" accept="image/*" class="hidden" onchange="importTimetablePhoto(this)">
+              </label>
+              <div id="tt-import" class="hidden mb-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs"></div>
+
               <!-- Classes List (localStorage 'skip.timetable') -->
               <div id="timetable-list" class="space-y-2"></div>
 
@@ -1493,6 +1500,83 @@
       document.getElementById('tt-name').value = '';
       document.getElementById('tt-room').value = '';
       triggerToast(`${c.name} 수업을 추가했어요.`);
+    }
+
+    // ---------------- 시간표 사진 → 수업 목록 (/api/timetable-image, 사진은 서버에 저장 안 함) ----------------
+    let importedClasses = [];
+
+    // 휴대폰 사진은 수 MB라서 긴 변 1600px JPEG로 줄여서 보냄
+    function shrinkImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(img.src);
+          resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        };
+        img.onerror = () => reject(new Error('사진을 열 수 없어요'));
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    async function importTimetablePhoto(input) {
+      const file = input.files[0];
+      input.value = '';
+      if (!file) return;
+      const label = document.getElementById('tt-photo-label');
+      const box = document.getElementById('tt-import');
+      label.textContent = '사진 읽는 중… (30초 정도 걸려요)';
+      box.classList.add('hidden');
+      try {
+        const image = await shrinkImage(file);
+        const res = await fetch('/api/timetable-image', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ image, mimeType: 'image/jpeg' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        importedClasses = data.classes.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+        renderImportPreview();
+      } catch (e) {
+        triggerToast(e.message || '사진을 읽지 못했어요');
+      } finally {
+        label.textContent = '시간표 사진으로 등록';
+      }
+    }
+
+    function renderImportPreview() {
+      const box = document.getElementById('tt-import');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="font-bold text-amber-900 mb-1">사진에서 ${importedClasses.length}개 수업을 찾았어요. 맞는지 확인해 주세요</div>
+        <div class="space-y-1 max-h-56 overflow-y-auto">
+          ${importedClasses.map((c, i) => `
+            <div class="flex items-center gap-1.5 p-1.5 rounded-lg bg-white border border-amber-100 text-[11px]">
+              <span class="font-bold text-slate-700 w-24 shrink-0">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
+              <span class="flex-1 truncate text-slate-900">${escapeHtml(c.name)}${c.room ? ` <span class="text-slate-400">${escapeHtml(c.room)}</span>` : ''}</span>
+              <button onclick="importedClasses.splice(${i}, 1); renderImportPreview()" class="text-slate-400 hover:text-rose-600">빼기</button>
+            </div>`).join('')}
+        </div>
+        <div class="text-[10px] text-amber-800 mt-1.5">시간이 틀린 수업은 빼고 아래 '+ 수업 추가'로 직접 넣어 주세요.</div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <button onclick="document.getElementById('tt-import').classList.add('hidden')" class="py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-600 tap-press">취소</button>
+          <button onclick="applyImportedTimetable()" class="py-1.5 rounded-lg bg-blue-600 text-white font-bold tap-press">이 시간표로 바꾸기</button>
+        </div>`;
+    }
+
+    function applyImportedTimetable() {
+      if (!importedClasses.length) return triggerToast('저장할 수업이 없어요');
+      timetable = importedClasses.map((c) => ({ ...c }));
+      saveTimetable();
+      document.getElementById('tt-import').classList.add('hidden');
+      renderTimetable();
+      loadHomeBriefing();
+      triggerToast(`시간표를 ${timetable.length}개 수업으로 바꿨어요.`);
     }
 
     function removeClass(idx) {
