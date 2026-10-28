@@ -527,7 +527,7 @@
               <div class="bg-white rounded-2xl border-2 border-blue-600 shadow-md overflow-hidden">
                 <div class="px-3.5 pt-3 pb-2.5 space-y-2">
                   <div class="flex items-center justify-between">
-                    <span class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
+                    <span id="rec-title" class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
                     <div class="flex items-center gap-1">
                       <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-slate-400 hover:text-blue-600 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
                       <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
@@ -1538,7 +1538,7 @@
       if (!hasHome() && !tripDest) {
         // 도착지가 없으면 그 자리에서 바로 검색창을 열어 줌 (같은 안내만 다시 그리면 눌러도 반응 없는 것처럼 보임)
         meta.textContent = '';
-        box.innerHTML = `<div class="p-3 text-slate-600">어디로 갈지 먼저 정해 주세요. 위 검색창에 가려는 곳을 입력하거나, 집을 등록하면 다음부터 바로 찾아요.<br>${REGISTER_HOME_BUTTON}</div>`;
+        box.innerHTML = `<div class="p-3 text-slate-600">어디로 갈지 먼저 정해 주세요. 위의 '📍 다른 곳'을 눌러 가려는 곳을 검색하거나, 집을 등록하면 다음부터 바로 찾아요.<br>${REGISTER_HOME_BUTTON}</div>`;
         if (byUser) {
           document.getElementById('trip-search').classList.remove('hidden');
           document.getElementById('trip-q').focus();
@@ -1546,7 +1546,13 @@
         }
         return;
       }
-      const basis = useNow ? { at: null, label: '지금 출발 기준' } : dismissalBasis();
+      const classBasis = dismissalBasis();
+      const basis = useNow ? { at: null, label: '지금 출발 기준' } : classBasis;
+      document.getElementById('rec-title').textContent = basis.at ? `${hhmm(new Date(basis.at).toISOString())} 수업 끝나고 하교하면?` : '지금 하교하면?';
+      // 수업 끝 기준 ↔ 지금 출발 전환 링크
+      const basisSwitch = classBasis.at
+        ? ` · <button onclick="runRecommend(${!useNow}, ${forceGate})" class="underline font-bold">${useNow ? '수업 끝 기준으로 보기' : '지금 출발로 보기'}</button>`
+        : '';
       meta.textContent = '위치 확인 중…';
       box.innerHTML = '';
       const pos = forceGate ? null : await getPosition();
@@ -1561,7 +1567,8 @@
         meta.innerHTML = `${escapeHtml(basis.label)} · ${origin} → ${escapeHtml(destLabel(data.destination))}`
           + (data.weather ? `<br>${escapeHtml(weatherText(data.weather))}` : '')
           + (data.fallback ? `<br><span class="text-amber-700">${escapeHtml(data.fallback)}</span>` : '')
-          + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '');
+          + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '')
+          + basisSwitch;
         box.innerHTML = renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
@@ -1703,7 +1710,8 @@
 
     // ---------------- 시간표 (기기 localStorage) ----------------
     const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
-    const DEFAULT_TIMETABLE = [
+    // 체험용 예시 시간표 (처음엔 비어 있고, 빈 화면의 '예시로 체험' 버튼으로만 불러옴)
+    const SAMPLE_TIMETABLE = [
       { day: 1, start: '09:00', end: '10:30', name: '응용통계학', room: '미래관6층11호실' },
       { day: 1, start: '10:30', end: '12:00', name: '엣지컴퓨팅', room: '미래관2층31호실' },
       { day: 1, start: '13:30', end: '15:00', name: 'College English I(ABEEK)', room: '북악관8층2호실' },
@@ -1727,7 +1735,15 @@
         const saved = JSON.parse(localStorage.getItem('skip.timetable'));
         if (Array.isArray(saved)) return saved;
       } catch {}
-      return DEFAULT_TIMETABLE.map((c) => ({ ...c }));
+      return [];
+    }
+
+    function loadSampleTimetable() {
+      timetable = SAMPLE_TIMETABLE.map((c) => ({ ...c }));
+      saveTimetable();
+      renderTimetable();
+      loadHomeBriefing();
+      triggerToast('예시 시간표를 넣었어요. 내 시간표로 바꾸려면 사진으로 등록하거나 과목을 눌러 삭제해 주세요.');
     }
 
     function saveTimetable() {
@@ -1765,7 +1781,8 @@
     function renderTimetable() {
       const list = document.getElementById('timetable-list');
       if (!timetable.length) {
-        list.innerHTML = '<div class="text-[11px] text-slate-500">등록된 수업이 없어요. 사진으로 등록하거나 아래에서 추가해 주세요.</div>';
+        list.innerHTML = `<div class="text-[11px] text-slate-500">등록된 수업이 없어요. 사진으로 등록하거나 아래에서 추가해 주세요.
+          <button onclick="loadSampleTimetable()" class="ml-1 underline font-bold text-slate-600">예시 시간표로 체험</button></div>`;
         return;
       }
       const days = timetable.some((c) => c.day === 6) ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
