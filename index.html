@@ -376,7 +376,7 @@
               <div class="mt-3 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <div class="text-[10px] text-blue-200">등록 목적지 (하차 거점)</div>
-                  <div id="home-card-dest" class="font-bold truncate mt-0.5">연신내역</div>
+                  <div id="home-card-dest" class="font-bold truncate mt-0.5">집 미등록</div>
                 </div>
                 <div class="border-l border-white/20 pl-2.5">
                   <div class="text-[10px] text-blue-200">1순위 경로 도착</div>
@@ -699,7 +699,7 @@
                 <div>
                   <div class="text-[10px] text-slate-400 font-semibold">귀가 목적지 (집 주소 또는 역)</div>
                   <div class="flex items-center justify-between mt-0.5">
-                    <span id="my-current-dest-txt" class="font-bold text-slate-800">연신내역</span>
+                    <span id="my-current-dest-txt" class="font-bold text-slate-800">아직 등록 안 됨</span>
                     <div class="flex items-center gap-3">
                       <button onclick="resetHome()" class="text-slate-400 hover:text-rose-600 font-bold text-xs tap-press">삭제</button>
                       <button onclick="openEditDestModal()" class="text-blue-600 font-bold text-xs tap-press">수정</button>
@@ -848,8 +848,8 @@
     ];
 
     let currentUniv = UNIVERSITIES[0]; // 국민대학교
-    const DEFAULT_HOME = '연신내역';
-    let homeDestination = (() => { try { return localStorage.getItem('skip.home') || DEFAULT_HOME; } catch { return DEFAULT_HOME; } })();
+    // 처음엔 집이 없음 → 홈·하교 화면에서 등록하라고 안내
+    let homeDestination = (() => { try { return localStorage.getItem('skip.home') || ''; } catch { return ''; } })();
     // 상세주소로 등록한 집 { name, address, lat, lng }. 없으면 homeDestination을 역 이름으로 사용
     let homePlace = (() => { try { return JSON.parse(localStorage.getItem('skip.homePlace')); } catch { return null; } })();
     let isFeedExpanded = false;
@@ -1186,7 +1186,28 @@
     }
 
     // 추천 API 호출. 같은 조건은 1분 동안 재사용해서 ODsay 호출 절약
+    function hasHome() {
+      return Boolean(homePlace || homeDestination);
+    }
+
+    // 내 정보 탭으로 가서 집 검색창을 열어 줌
+    function goRegisterHome() {
+      switchTab(5);
+      document.getElementById('home-search').classList.remove('hidden');
+      document.getElementById('home-q').focus();
+    }
+
+    const REGISTER_HOME_BUTTON = '<button onclick="goRegisterHome()" class="mt-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold tap-press">집 등록하러 가기</button>';
+
+    // 홈 카드·내 정보·하교 탭의 집 이름 표시
+    function renderHomeName() {
+      document.getElementById('home-card-dest').innerText = homeDestination || '집 미등록';
+      document.getElementById('my-current-dest-txt').innerText = homeDestination || '아직 등록 안 됨';
+      renderTripDest();
+    }
+
     async function fetchRecommend(params = {}) {
+      if (!hasHome() && !params.homeLat) throw new Error('먼저 내 정보에서 집을 등록해 주세요.');
       const qs = new URLSearchParams({ ...homeParams(), mode: recMode, ...params });
       const key = `skip.rec:${qs}`;
       try {
@@ -1366,6 +1387,11 @@
         meta.textContent = 'node server.js로 실행한 주소에서만 동작해요.';
         return;
       }
+      if (!hasHome() && !tripDest) {
+        meta.textContent = '';
+        box.innerHTML = `<div class="p-3 text-slate-600">집을 등록하거나 '다른 곳'에서 도착지를 골라 주세요.<br>${REGISTER_HOME_BUTTON}</div>`;
+        return;
+      }
       const basis = useNow ? { at: null, label: '지금 출발 기준' } : dismissalBasis();
       meta.textContent = '위치 확인 중…';
       box.innerHTML = '';
@@ -1398,6 +1424,12 @@
       const body = document.getElementById('brief-body');
       const eta = document.getElementById('brief-eta');
       document.getElementById('brief-basis').textContent = basis.label;
+      if (!hasHome()) {
+        title.textContent = '집을 먼저 등록해 주세요';
+        body.innerHTML = `집 주소나 가까운 역을 등록하면 수업이 끝나는 시각에 맞춰 집 가는 경로를 알려드려요.<br>${REGISTER_HOME_BUTTON}`;
+        eta.textContent = '-';
+        return;
+      }
       try {
         const data = await fetchRecommend(basis.at ? { at: basis.at } : {});
         const [top, second] = data.routes;
@@ -1705,12 +1737,12 @@
         const live = top.legs.some((l) => l.realtime);
         reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분 + 강의실까지 ${data.classBufferMin}분 여유로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
           + (live ? ' 실시간 도착 정보가 반영됐어요.' : ' 출발이 가까워지면 실시간 도착 정보로 다시 계산돼요. 지금은 평소 배차·혼잡도 기준이에요.');
-        document.getElementById('am-routes-title').textContent = `${data.from.name}역 → 국민대 정문`;
+        document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → 국민대 정문`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
         routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: '국민대 정문' });
       } catch (e) {
-        alarm.textContent = '계산 실패';
-        reason.textContent = e.message;
+        alarm.textContent = hasHome() ? '계산 실패' : '집 미등록';
+        reason.innerHTML = hasHome() ? escapeHtml(e.message) : `집을 등록하면 첫 수업에 맞춘 알람 시각을 계산해요.<br>${REGISTER_HOME_BUTTON}`;
       }
     }
 
@@ -2012,7 +2044,7 @@
     let tripDest = null;
 
     function renderTripDest() {
-      document.getElementById('trip-home-name').textContent = homeDestination;
+      document.getElementById('trip-home-name').textContent = homeDestination || '집 등록';
       document.getElementById('trip-other-name').textContent = tripDest ? tripDest.name : '다른 곳';
       const on = ['bg-blue-600', 'text-white'], off = ['bg-slate-100', 'text-slate-600'];
       for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) {
@@ -2033,6 +2065,7 @@
     }
 
     function clearTripDest() {
+      if (!hasHome()) return goRegisterHome();
       if (!tripDest) return;
       tripDest = null;
       renderTripDest();
@@ -2047,31 +2080,27 @@
         localStorage.setItem('skip.homePlace', JSON.stringify(homePlace));
         localStorage.setItem('skip.home', homeDestination);
       } catch {}
-      document.getElementById('home-card-dest').innerText = homeDestination;
-      document.getElementById('my-current-dest-txt').innerText = homeDestination;
       document.getElementById('home-search').classList.add('hidden');
       document.getElementById('home-results').innerHTML = '';
       document.getElementById('home-q').value = '';
       triggerToast(`귀가 목적지를 ${r.name}(으)로 바꿨어요.`);
-      renderTripDest();
+      renderHomeName();
       loadHomeBriefing();
     }
 
-    // 등록한 집을 지우고 기본 목적지(연신내역)로 되돌림
+    // 등록한 집을 지움 → 다시 등록 안내 상태로
     function resetHome() {
-      if (!homePlace && homeDestination === DEFAULT_HOME) return triggerToast('지울 귀가 목적지가 없어요.');
+      if (!hasHome()) return triggerToast('지울 귀가 목적지가 없어요.');
       homePlace = null;
-      homeDestination = DEFAULT_HOME;
+      homeDestination = '';
       try {
         localStorage.removeItem('skip.homePlace');
         localStorage.removeItem('skip.home');
       } catch {}
-      document.getElementById('home-card-dest').innerText = homeDestination;
-      document.getElementById('my-current-dest-txt').innerText = homeDestination;
       document.getElementById('home-search').classList.add('hidden');
-      renderTripDest();
+      renderHomeName();
       loadHomeBriefing();
-      triggerToast(`귀가 목적지를 지우고 기본값(${DEFAULT_HOME})으로 돌렸어요.`);
+      triggerToast('귀가 목적지를 지웠어요. 새 집을 등록해 주세요.');
     }
 
     function triggerToast(msg) {
@@ -2087,9 +2116,7 @@
       }, 2500);
     }
 
-    document.getElementById('home-card-dest').innerText = homeDestination;
-    document.getElementById('my-current-dest-txt').innerText = homeDestination;
-    renderTripDest();
+    renderHomeName();
     renderTimetable();
     loadHomeBriefing();
     loadExitStatus();
