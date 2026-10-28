@@ -14,18 +14,26 @@ export function serviceKey(raw) {
 }
 
 export async function fetchJson(url) {
+  return (await fetchJsonAt(url)).data;
+}
+
+// { data, at }: at = 실제로 받아온 시각 (캐시에서 꺼내도 원래 시각). 같은 주소를 동시에 부르면 한 번만 호출
+export function fetchJsonAt(url) {
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new HttpError(502, `공공 API 응답이 JSON이 아니에요: ${text.slice(0, 200)}`);
-  }
-  cache.set(url, { at: Date.now(), data });
-  return data;
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.promise;
+  const entry = { at: Date.now() };
+  entry.promise = (async () => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const text = await res.text();
+    try {
+      return { data: JSON.parse(text), at: entry.at };
+    } catch {
+      throw new HttpError(502, `공공 API 응답이 JSON이 아니에요: ${text.slice(0, 200)}`);
+    }
+  })();
+  entry.promise.catch(() => cache.delete(url));
+  cache.set(url, entry);
+  return entry.promise;
 }
 
 export class HttpError extends Error {

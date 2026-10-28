@@ -1,14 +1,18 @@
 // ODsay 대중교통 길찾기 (lab.odsay.com)
 // 무료 요금제는 하루 30회라, 경로 구조는 오래 저장하고 실시간 부분만 매번 다시 계산한다.
 // 배포: Vercel Runtime Cache, 로컬 개발: data/.odsay-cache.json 파일 (재시작해도 유지)
+// 호출이 실패하면(한도 초과 등) 기간이 지난 저장 경로 → 서울시 환승경로 API 순서로 대신 씀
 import { getCache } from '@vercel/functions';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { requireEnv, HttpError } from './_lib.js';
+import { seoulPaths } from './_pathinfo.js';
 
 const BASE = 'https://api.odsay.com/v1/api';
 const STATION_TTL_SEC = 30 * 24 * 3600;
 // 노선 구조는 자주 안 바뀌므로 7일. 실시간 도착·혼잡도는 매번 새로 계산
 const PATH_TTL_SEC = 7 * 24 * 3600;
+// 한도 초과 대비 예비 사본. 노선이 조금 바뀌었어도 실시간 계산은 매번 새로 하므로 안 주는 것보다 나음
+const STALE_TTL_SEC = 90 * 24 * 3600;
 const LOCAL_FILE = process.env.VERCEL ? null : new URL('../data/.odsay-cache.json', import.meta.url);
 const cache = LOCAL_FILE ? fileCache(LOCAL_FILE) : getCache({ namespace: 'odsay' });
 
@@ -43,23 +47,53 @@ async function odsay(path, params) {
   return data.result;
 }
 
-async function cached(key, ttl, load) {
+// 저장 형식 { at, value } (예전 형식은 값만 저장돼 있어서 at 없음)
+const unwrap = (hit) => (hit && typeof hit === 'object' && 'value' in hit && 'at' in hit ? hit : { at: null, value: hit });
+
+// 같은 키를 동시에 여러 요청이 찾으면 ODsay는 한 번만 부름
+const inflight = new Map();
+
+async function cachedEntry(key, ttl, load) {
   const hit = await cache.get(key).catch(() => undefined);
-  if (hit !== undefined && hit !== null) return hit;
-  const value = await load();
-  await cache.set(key, value, { ttl, name: key.split(':')[0] }).catch(() => {});
-  return value;
+  if (hit !== undefined && hit !== null) return { ...unwrap(hit), cached: true };
+  if (!inflight.has(key)) {
+    inflight.set(key, (async () => {
+      const entry = { at: Date.now(), value: await load() };
+      const name = key.split(':')[0];
+      await cache.set(key, entry, { ttl, name }).catch(() => {});
+      await cache.set(`stale:${key}`, entry, { ttl: STALE_TTL_SEC, name: 'stale' }).catch(() => {});
+      return { ...entry, cached: false };
+    })().finally(() => inflight.delete(key)));
+  }
+  return inflight.get(key);
+}
+
+async function cached(key, ttl, load) {
+  return (await cachedEntry(key, ttl, load)).value;
+}
+
+// 기간 지난 예비 사본
+async function staleEntry(key) {
+  const hit = await cache.get(`stale:${key}`).catch(() => undefined);
+  return hit ? unwrap(hit) : null;
 }
 
 // 역 이름 → 좌표 (지하철역 우선). 역 좌표는 거의 바뀌지 않으므로 오래 저장
 export async function findStation(name) {
   const clean = name.replace(/역$/, '');
-  return cached(`station:${clean}`, STATION_TTL_SEC, async () => {
-    const result = await odsay('searchStation', { stationName: clean, stationClass: '2', CID: '1000' });
-    const st = result?.station?.[0];
-    if (!st) throw new HttpError(404, `'${name}' 역을 찾지 못했어요`);
-    return { name: st.stationName, lat: Number(st.y), lng: Number(st.x) };
-  });
+  const key = `station:${clean}`;
+  try {
+    return await cached(key, STATION_TTL_SEC, async () => {
+      const result = await odsay('searchStation', { stationName: clean, stationClass: '2', CID: '1000' });
+      const st = result?.station?.[0];
+      if (!st) throw new HttpError(404, `'${name}' 역을 찾지 못했어요`);
+      return { name: st.stationName, lat: Number(st.y), lng: Number(st.x) };
+    });
+  } catch (e) {
+    const stale = e.status === 404 ? null : await staleEntry(key);
+    if (stale) return stale.value;
+    throw e;
+  }
 }
 
 export function pathKey(from, to) {
@@ -68,9 +102,22 @@ export function pathKey(from, to) {
 }
 
 // 출발·도착 좌표는 약 100m 단위로 묶어서, 같은 건물 근처에서는 저장된 경로를 재사용
+// 반환: { paths, source: 'odsay'|'odsay-stale'|'seoul', at(경로를 받아온 시각), cached }
 export async function searchPaths(from, to) {
-  return cached(pathKey(from, to), PATH_TTL_SEC, async () => {
-    const result = await odsay('searchPubTransPathT', { SX: from.lng, SY: from.lat, EX: to.lng, EY: to.lat });
-    return result?.path ?? [];
-  });
+  const key = pathKey(from, to);
+  try {
+    const e = await cachedEntry(key, PATH_TTL_SEC, async () => {
+      const result = await odsay('searchPubTransPathT', { SX: from.lng, SY: from.lat, EX: to.lng, EY: to.lat });
+      return result?.path ?? [];
+    });
+    return { paths: e.value, source: 'odsay', at: e.at, cached: e.cached };
+  } catch (err) {
+    const stale = await staleEntry(key);
+    if (stale?.value?.length) return { paths: stale.value, source: 'odsay-stale', at: stale.at, cached: true, error: err.message };
+    try {
+      const paths = await seoulPaths(from, to);
+      if (paths.length) return { paths, source: 'seoul', at: Date.now(), cached: false, error: err.message };
+    } catch {}
+    throw err;
+  }
 }

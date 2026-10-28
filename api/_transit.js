@@ -1,5 +1,6 @@
 // 서울시 버스·지하철 실시간 API 호출과 응답 정리
-import { fetchJson, requireEnv, serviceKey, HttpError } from './_lib.js';
+import { getCache } from '@vercel/functions';
+import { fetchJsonAt, requireEnv, serviceKey, HttpError } from './_lib.js';
 
 const BUS_BASE = 'http://ws.bus.go.kr/api/rest';
 const SUBWAY_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
@@ -7,15 +8,16 @@ const SUBWAY_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
 // 버스 혼잡도 코드 (congestion1/2)
 const CONGESTION = { 0: null, 3: '여유', 4: '보통', 5: '혼잡', 6: '매우혼잡' };
 
-async function busApi(path, params) {
+async function busApi(path, params, withTime = false) {
   const key = serviceKey(requireEnv('SEOUL_BUS_KEY'));
   const qs = new URLSearchParams({ ...params, resultType: 'json' });
-  const data = await fetchJson(`${BUS_BASE}/${path}?serviceKey=${key}&${qs}`);
+  const { data, at } = await fetchJsonAt(`${BUS_BASE}/${path}?serviceKey=${key}&${qs}`);
   const header = data.msgHeader;
   if (header && header.headerCd !== '0' && header.headerCd !== '4') {
     throw new HttpError(502, `버스 API 오류 ${header.headerCd}: ${header.headerMsg}`);
   }
-  return data.msgBody?.itemList ?? [];
+  const items = data.msgBody?.itemList ?? [];
+  return withTime ? { items, at } : items;
 }
 
 // "3분12초후[2번째 전]" → 192초
@@ -45,9 +47,10 @@ function busArrival(it, n) {
 }
 
 export async function busStop(ars) {
-  const items = await busApi('stationinfo/getStationByUid', { arsId: ars });
+  const { items, at } = await busApi('stationinfo/getStationByUid', { arsId: ars }, true);
   return {
     ars,
+    fetchedAt: new Date(at).toISOString(),
     name: items[0]?.stNm ?? null,
     routes: items.map((it) => ({
       route: it.rtNm,
@@ -55,6 +58,9 @@ export async function busStop(ars) {
       direction: it.adirection || null,
       nextStop: it.nxtStn || null,
       headwayMin: Number(it.term) || null,
+      // 기점(차고지) 첫차·막차 출발 시각 'HHmm'. 이 정류장을 지나는 시각은 이보다 늦음
+      firstTm: it.firstTm?.trim() || null,
+      lastTm: it.lastTm?.trim() || null,
       arrivals: [busArrival(it, 1), busArrival(it, 2)],
     })),
   };
@@ -74,7 +80,7 @@ export async function busStopsNear(lat, lng, radius) {
 
 export async function subwayStation(name) {
   const key = requireEnv('SEOUL_SUBWAY_KEY');
-  const data = await fetchJson(
+  const { data, at } = await fetchJsonAt(
     `${SUBWAY_BASE}/${key}/json/realtimeStationArrival/0/30/${encodeURIComponent(name)}`,
   );
   const err = data.errorMessage;
@@ -82,6 +88,7 @@ export async function subwayStation(name) {
   if (data.code && data.code !== 'INFO-000') throw new HttpError(502, `지하철 API 오류 ${data.code}: ${data.message}`);
   return {
     station: name,
+    fetchedAt: new Date(at).toISOString(),
     trains: (data.realtimeArrivalList ?? []).map((t) => ({
       lineId: t.subwayId,
       direction: t.updnLine,
@@ -94,4 +101,57 @@ export async function subwayStation(name) {
       receivedAt: t.recptnDt,
     })),
   };
+}
+
+// ---------------- 지하철 시간표 (서울 열린데이터광장, 1~8호선) ----------------
+// 실시간 범위 밖(수업 끝나는 시각 등)일 때 실제 열차 시각으로 대기 시간을 계산. 우이신설 등은 데이터 없음
+const OPEN_BASE = 'http://openapi.seoul.go.kr:8088';
+const TIMETABLE_TTL_SEC = 7 * 24 * 3600;
+const ttCache = process.env.VERCEL ? getCache({ namespace: 'subway-tt' }) : null;
+const ttMemory = new Map();
+
+async function openApi(service, ...args) {
+  const key = requireEnv('SEOUL_OPENDATA_KEY');
+  const { data } = await fetchJsonAt(`${OPEN_BASE}/${key}/json/${service}/1/500/${args.map(encodeURIComponent).join('/')}/`);
+  const body = data[service];
+  if (!body) {
+    if (data.RESULT?.CODE === 'INFO-200') return [];
+    throw new HttpError(502, `시간표 API 오류 ${data.RESULT?.CODE}: ${data.RESULT?.MESSAGE}`);
+  }
+  return body.row ?? [];
+}
+
+function memo(key, load) {
+  if (!ttMemory.has(key)) {
+    ttMemory.set(key, (async () => {
+      const hit = await ttCache?.get(key).catch(() => undefined);
+      if (hit) return hit;
+      const value = await load();
+      await ttCache?.set(key, value, { ttl: TIMETABLE_TTL_SEC, name: 'subway-tt' }).catch(() => {});
+      return value;
+    })().catch((e) => {
+      ttMemory.delete(key);
+      throw e;
+    }));
+  }
+  return ttMemory.get(key);
+}
+
+// lineNo: 1~8 (숫자), inout: 1 상행·내선 / 2 하행·외선, week: 1 평일 / 2 토 / 3 휴일
+// 반환: 출발 시각(자정 기준 초, 24시 넘으면 그대로 86400+) 오름차순 [{ sec, heading, express }]
+export async function subwayTimetable(station, lineNo, inout, week) {
+  const name = station.replace(/역$/, '');
+  return memo(`tt:${name}:${lineNo}:${inout}:${week}`, async () => {
+    const info = await openApi('SearchInfoBySubwayNameService', name);
+    const st = info.find((r) => Number(r.LINE_NUM.match(/^0?(\d)호선/)?.[1]) === lineNo);
+    if (!st) return [];
+    const rows = await openApi('SearchSTNTimeTableByIDService', st.STATION_CD, week, inout);
+    return rows
+      .map((r) => {
+        const [h, m, sec] = (r.LEFTTIME !== '00:00:00' ? r.LEFTTIME : r.ARRIVETIME).split(':').map(Number);
+        return { sec: h * 3600 + m * 60 + sec, heading: r.SUBWAYENAME, express: r.EXPRESS_YN === 'D' };
+      })
+      .filter((t) => Number.isFinite(t.sec))
+      .sort((a, b) => a.sec - b.sec);
+  });
 }

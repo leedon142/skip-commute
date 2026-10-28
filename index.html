@@ -175,9 +175,9 @@
           <i class="ph-bold ph-navigation-arrow text-base"></i>
         </div>
         <div class="flex-1">
-          <div class="text-xs font-bold text-slate-900">🌧️ 17:45 수업 종료: 정문 정체로 우회 추천</div>
-          <p class="text-[11px] text-slate-600 leading-snug mt-0.5">
-            정문 버스 대기열 70m 초과! <b>정문 셔틀(18:05)</b> 또는 <b>후문 우이신설선</b> 이용 시 12분 이상 단축됩니다.
+          <div id="push-title" class="text-xs font-bold text-slate-900">(예시) 하교 경로 알림</div>
+          <p id="push-body" class="text-[11px] text-slate-600 leading-snug mt-0.5">
+            아직 계산 전이라 예시 화면이에요. 집을 등록하면 실제 추천 경로가 여기에 표시돼요.
           </p>
         </div>
       </div>
@@ -197,12 +197,9 @@
         
         <!-- Top Clock & Date Area -->
         <div class="text-center mt-6">
-          <div class="text-sm text-slate-400 font-medium">9월 24일 화요일</div>
-          <div class="text-6xl font-light tracking-tight mt-1 font-mono">17:45</div>
-          <div class="mt-3 inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-xs text-slate-200 border border-white/10">
-            <i class="ph-bold ph-cloud-rain text-cyan-300"></i>
-            <span>북악산 일대 가을비 · 19°C</span>
-          </div>
+          <div id="lock-date" class="text-sm text-slate-400 font-medium"></div>
+          <div id="lock-time" class="text-6xl font-light tracking-tight mt-1 font-mono"></div>
+          <div id="lock-weather" class="hidden mt-3 inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-xs text-slate-200 border border-white/10"></div>
         </div>
 
         <!-- Lockscreen Push Card Preview -->
@@ -214,9 +211,9 @@
             </span>
             <span class="text-[10px]">지금</span>
           </div>
-          <div class="text-xs font-bold text-white mt-1">공학관 강의 종료 ➔ 귀가 추천 경로</div>
-          <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
-            정문 정류소 정체 지연 감지. <b>정문 셔틀(18:05)</b> 또는 <b>후문 우이신설선 도보</b> 이용 시 도로 정체를 완벽 회피합니다.
+          <div id="lock-card-title" class="text-xs font-bold text-white mt-1">(예시) 하교 추천 경로</div>
+          <p id="lock-card-body" class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            아직 계산 전이라 예시 화면이에요. 집을 등록하면 수업 끝나는 시각 기준 실제 경로가 표시돼요.
           </p>
           <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
             <i class="ph-bold ph-door-open"></i>
@@ -257,17 +254,17 @@
           <!-- Calendar / Weather Twin Widget -->
           <div class="grid grid-cols-2 gap-3">
             <div class="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-3.5 flex flex-col justify-between h-28 shadow-lg">
-              <div class="text-[11px] font-bold text-rose-400">화요일</div>
-              <div class="text-3xl font-black">24</div>
-              <div class="text-[10px] text-slate-300">오늘 일정: 17:45 하교</div>
+              <div id="sb-day" class="text-[11px] font-bold text-rose-400"></div>
+              <div id="sb-date" class="text-3xl font-black"></div>
+              <div id="sb-sched" class="text-[10px] text-slate-300"></div>
             </div>
             <div class="bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-3.5 flex flex-col justify-between h-28 shadow-lg">
               <div class="flex items-center justify-between text-[11px] text-cyan-300 font-bold">
                 <span>서울 성북구</span>
                 <i class="ph-bold ph-cloud-rain"></i>
               </div>
-              <div class="text-3xl font-extrabold">19°</div>
-              <div class="text-[10px] text-slate-300">비 · 정릉로 정체 심화</div>
+              <div id="sb-temp" class="text-3xl font-extrabold">-</div>
+              <div id="sb-weather" class="text-[10px] text-slate-300">날씨 불러오기 전</div>
             </div>
           </div>
 
@@ -540,8 +537,9 @@
                     </div>
                   </div>
                   <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
-                    <div><b class="text-slate-800">빠른 순</b> · 지금 위치에서 걷는 시간, 실시간 버스·지하철 도착, 만차로 놓칠 확률까지 넣어 집에 가장 빨리 도착하는 경로부터 보여줘요.</div>
-                    <div><b class="text-slate-800">편한 순</b> · 서서 가는 시간이 짧은 경로부터 보여줘요. 버스는 실시간 혼잡도·탑승 인원으로, 지하철은 시간대별 평소 혼잡도로 앉을 수 있을지 추정해요. 서서 가는 1분을 1.5분처럼 계산해서, 몇 분 더 걸려도 앉아 갈 수 있으면 위로 올라와요.</div>
+                    <div><b class="text-slate-800">빠른 순</b> · 예상 도착 시각이 이른 순서. 예상 소요 = 도보(내 걸음 속도·비 오면 더 길게) + 대기(실시간 → 지하철 시간표 → 배차간격 절반 순으로 사용) + 만차로 못 탈 확률 × 배차간격 + 탑승 시간.</div>
+                    <div><b class="text-slate-800">편한 순</b> · 예상 소요에 벌점을 더한 순서. 서서 가는 1분 +0.5분, 앉을 수 있을지 모르는 1분 +0.25분, 환승 1회 +2분. 그래서 몇 분 더 걸려도 앉아 가고 환승이 적은 경로가 위로 올라와요.</div>
+                    <div>운행이 끝난 노선이 낀 경로는 순서와 상관없이 맨 아래에 회색으로 보여줘요.</div>
                   </div>
                   <div class="text-xs">
                     <div class="flex items-center gap-1.5">
@@ -645,7 +643,7 @@
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-slate-800">학우들의 실시간 현장 피드</span>
-                <span class="text-[10px] text-slate-400">실시간 연동 중</span>
+                <span class="text-[10px] text-slate-400">회색 글은 예시 · 서버 공유 준비 중</span>
               </div>
 
               <div id="report-feed-list" class="space-y-2">
@@ -1385,7 +1383,8 @@
           <div class="mt-1 p-2 rounded-lg bg-slate-50 border border-slate-100 space-y-0.5">
             ${l.type === 'subway' && l.way ? `<div class="text-[10px] text-slate-500">${escapeHtml(l.way)} 방면</div>` : ''}
             ${live.length ? `<div class="text-[11px] text-slate-700">${live.join(' · ')}</div>` : ''}
-            <div class="text-[10px] text-slate-500">대기 ${Math.round(l.waitSec / 60)}분${l.realtime ? ' (실시간)' : ' (추정)'}${l.extraWaitSec ? ` + 만차 대비 ${Math.round(l.extraWaitSec / 60)}분` : ''} · ${l.rideMin}분 탑승
+            ${l.ended || l.lastVehicle || l.lastRisk ? `<div class="text-[11px] font-bold ${l.ended ? 'text-rose-600' : 'text-amber-600'}">${escapeHtml(l.notes.find((n) => /막차|운행/.test(n)) || '막차')}</div>` : ''}
+            <div class="text-[10px] text-slate-500">대기 ${Math.round(l.waitSec / 60)}분${l.realtime ? ' (실시간)' : l.timetable ? ' (시간표)' : ' (추정)'}${l.extraWaitSec ? ` + 만차 대비 ${Math.round(l.extraWaitSec / 60)}분` : ''} · ${l.rideMin}분 탑승
               ${l.seatLikely === true ? ' · <span class="text-emerald-700 font-bold">착석 가능</span>' : l.seatLikely === false ? ' · <span class="text-rose-600 font-bold">서서 감</span>' : ''}</div>
             ${next}
             ${stationCongestionBars(l)}
@@ -1407,7 +1406,7 @@
       const items = r.legs.map((l) => l.type === 'walk'
         ? `<li class="relative pl-5 text-[11px] text-slate-500">
              <span class="absolute left-0.5 top-1 w-2 h-2 rounded-full bg-slate-300"></span>
-             🚶 도보 ${l.minutes}분${l.distanceM ? ` · ${l.distanceM}m` : ''}${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.estimated ? ' (직선거리 추정)' : ''}
+             🚶 도보 ${l.minutes}분${l.distanceM ? ` · ${l.distanceM}m` : ''}${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.uphill ? ` (오르막 ×${l.uphill})` : ''}${l.estimated ? ' (직선거리 추정)' : ''}
            </li>`
         : rideDetail(l)).join('');
       return `
@@ -1417,6 +1416,7 @@
             <span>환승 ${Math.max(0, rides.length - 1)}회 · 도보 ${walkMin}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}</span>
             <span>${hhmm(r.leaveAt)} 출발</span>
           </div>
+          ${breakdownLine(r)}
           <ol class="relative space-y-2.5 before:absolute before:left-[5px] before:top-1 before:bottom-1 before:w-0.5 before:bg-slate-200">
             ${items}
             <li class="relative pl-5">
@@ -1429,19 +1429,50 @@
         </div>`;
     }
 
+    // 예상 소요 내역: 도보 + 대기 + 만차 대비 + 탑승 = 총 (서버 계산과 같은 값)
+    function breakdownLine(r) {
+      const b = r.breakdown;
+      if (!b) return '';
+      const m = (sec) => Math.round(sec / 60);
+      const parts = [`도보 ${m(b.walkSec)}`, `대기 ${m(b.waitSec)}`];
+      if (b.extraWaitSec) parts.push(`만차 대비 ${m(b.extraWaitSec)}`);
+      parts.push(`탑승 ${m(b.rideSec)}`);
+      const penalty = r.scoreDetail?.penaltySec ? ` · 편한 순 벌점 +${m(r.scoreDetail.penaltySec)}분` : '';
+      return `<div class="text-[10px] text-slate-500">예상 소요 ${parts.join(' + ')} = <b class="text-slate-700">${m(r.totalSec)}분</b>${penalty}</div>`;
+    }
+
+    // 정보 출처와 갱신 시각
+    function sourcesBox(data) {
+      const list = data.sources ?? [];
+      if (!list.length) return '';
+      const newest = list.map((x) => x.at).filter(Boolean).sort().at(-1);
+      return `
+        <details class="px-3.5 py-2 text-[10px] text-slate-500">
+          <summary class="cursor-pointer">정보 출처${newest ? ` · ${hhmm(newest)} 갱신` : ''} · ${hhmm(data.generatedAt)} 계산</summary>
+          <ul class="mt-1 space-y-0.5">
+            ${list.map((x) => `<li><b class="text-slate-600">${escapeHtml(x.what)}</b> ${escapeHtml(x.by)}${x.at ? ` · ${hhmm(x.at)}` : ''}${x.note ? ` · ${escapeHtml(x.note)}` : ''}</li>`).join('')}
+          </ul>
+        </details>`;
+    }
+
+    function weatherText(w) {
+      if (!w) return '';
+      return w.precip ? `${w.precip} 예보${w.tempC != null ? ` ${w.tempC}°C` : ''} · 도보 시간을 늘려 계산` : `강수 없음${w.tempC != null ? ` ${w.tempC}°C` : ''}`;
+    }
+
     let lastRoutes = [];
 
     function renderRoutes(routes, { morning = false, dest = '' } = {}) {
       if (!morning) lastRoutes = routes;
       return routes.map((r, i) => `
-          <div class="px-3.5 py-2.5 ${i === 0 ? 'bg-blue-50/60' : ''}">
+          <div class="px-3.5 py-2.5 ${r.unavailable ? 'opacity-50' : i === 0 ? 'bg-blue-50/60' : ''}">
             <div onclick="toggleRoute(this)" class="space-y-1.5 cursor-pointer">
               <div class="flex items-baseline justify-between">
                 <span class="font-extrabold ${i === 0 ? 'text-blue-700' : 'text-slate-800'}">${i + 1}순위 · ${morning ? `늦어도 ${hhmm(r.leaveBy)} 출발` : `${hhmm(r.arriveAt)} 도착`}</span>
                 <span class="text-[11px] text-slate-500 flex items-center gap-1">${Math.round(r.totalSec / 60)}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}
                   <i class="route-chevron ph-bold ph-caret-down transition-transform"></i></span>
               </div>
-              ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+              ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
               <div class="flex items-center gap-1 flex-wrap">${r.legs.filter((l) => l.type !== 'walk').map((l) =>
                 `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`).join('<i class="ph-bold ph-caret-right text-slate-400 text-[10px]"></i>')}
                 <span class="text-[10px] text-slate-400 ml-1">눌러서 자세히</span>
@@ -1467,7 +1498,30 @@
       return { at: null, label: '지금 출발 기준' };
     }
 
-    async function runRecommend(useNow = false) {
+    // 최근 성공한 추천 (API가 실패해도 보여주기 위해 기기에 저장)
+    const LAST_REC_KEY = 'skip.lastRec';
+    function saveLastRec(data, label) {
+      try { localStorage.setItem(LAST_REC_KEY, JSON.stringify({ at: Date.now(), label, data })); } catch {}
+    }
+    function loadLastRec() {
+      try { return JSON.parse(localStorage.getItem(LAST_REC_KEY)); } catch { return null; }
+    }
+
+    // 하교 시각 30분 전이 되면 실시간 정보로 다시 계산 (화면이 열려 있을 때)
+    let liveRefreshTimer = null;
+    function scheduleLiveRefresh(at) {
+      clearTimeout(liveRefreshTimer);
+      const wait = at - 30 * 60000 - Date.now();
+      if (!at || wait <= 0 || wait > 12 * 3600e3) return;
+      liveRefreshTimer = setTimeout(() => {
+        sessionStorage.clear();
+        loadHomeBriefing();
+        if (document.getElementById('rec-results').children.length) runRecommend();
+        triggerToast('하교 30분 전이라 실시간 정보로 다시 계산했어요.');
+      }, wait);
+    }
+
+    async function runRecommend(useNow = false, forceGate = false) {
       track(tripDest ? '하교추천-다른곳' : '하교추천');
       const box = document.getElementById('rec-results');
       const meta = document.getElementById('rec-meta');
@@ -1483,7 +1537,7 @@
       const basis = useNow ? { at: null, label: '지금 출발 기준' } : dismissalBasis();
       meta.textContent = '위치 확인 중…';
       box.innerHTML = '';
-      const pos = await getPosition();
+      const pos = forceGate ? null : await getPosition();
       meta.textContent = '실시간 경로 계산 중…';
       const params = {};
       if (pos) { params.lat = pos.lat; params.lng = pos.lng; }
@@ -1491,11 +1545,23 @@
       if (tripDest) Object.assign(params, { homeLat: tripDest.lat.toFixed(4), homeLng: tripDest.lng.toFixed(4), homeName: tripDest.name });
       try {
         const data = await fetchRecommend(params);
-        meta.textContent = `${basis.label} · ${pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준'} → ${destLabel(data.destination)}`;
-        box.innerHTML = renderRoutes(data.routes, { dest: destLabel(data.destination) });
+        const origin = forceGate ? '정문 기준' : pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '위치 권한 없음 · 정문 기준';
+        meta.innerHTML = `${escapeHtml(basis.label)} · ${origin} → ${escapeHtml(destLabel(data.destination))}`
+          + (data.weather ? `<br>${escapeHtml(weatherText(data.weather))}` : '')
+          + (data.fallback ? `<br><span class="text-amber-700">${escapeHtml(data.fallback)}</span>` : '')
+          + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '');
+        box.innerHTML = renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        saveLastRec(data, destLabel(data.destination));
+        scheduleLiveRefresh(basis.at);
       } catch (e) {
         meta.textContent = '';
-        box.innerHTML = `<div class="p-3 text-rose-700">추천 실패: ${escapeHtml(e.message)}</div>`;
+        const last = loadLastRec();
+        box.innerHTML = `
+          <div class="p-3 text-rose-700">추천 실패: ${escapeHtml(e.message)}
+            ${forceGate ? '' : `<br><button onclick="runRecommend(${useNow}, true)" class="mt-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold tap-press">정문 기준으로 다시 찾기</button>`}
+          </div>
+          ${last ? `<div class="px-3.5 pt-1 pb-2 text-[11px] text-slate-500">최근 조회 결과 (${new Date(last.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 기준, 실시간 아님) → ${escapeHtml(last.label)}</div>
+            ${renderRoutes(last.data.routes, { dest: last.label })}` : ''}`;
       }
     }
 
@@ -1535,10 +1601,54 @@
         if (second) reasons.push(`2순위는 ${rideName(second.legs.find((l) => l.type !== 'walk'))}, ${hhmm(second.arriveAt)} 도착.`);
         body.textContent = reasons.join(' ');
         eta.textContent = `${Math.round(top.totalSec / 60)}분 (${hhmm(top.arriveAt)})`;
+        fillDemoNotice(data, top, first, basis);
+        scheduleLiveRefresh(basis.at);
       } catch (e) {
         title.textContent = '경로를 불러오지 못했어요';
         body.textContent = e.message;
         eta.textContent = '-';
+      }
+    }
+
+    // 데스크톱 데모의 잠금화면·푸시 배너를 실제 추천 결과로 채움
+    function fillDemoNotice(data, top, first, basis) {
+      const title = `${basis.label.replace(' 기준', '')} · ${first.from} ${rideName(first)} 추천`;
+      const body = `${hhmm(first.departAt)} 탑승 (대기 ${Math.round(first.waitSec / 60)}분${first.realtime ? ', 실시간' : first.timetable ? ', 시간표' : ', 추정'}) → ${hhmm(top.arriveAt)} ${destLabel(data.destination)} 도착, 총 ${Math.round(top.totalSec / 60)}분.`
+        + (top.tags.length ? ` ${top.tags.join(' · ')}.` : '');
+      document.getElementById('push-title').textContent = title;
+      document.getElementById('push-body').textContent = body;
+      document.getElementById('lock-card-title').textContent = title;
+      document.getElementById('lock-card-body').textContent = body;
+      const w = data.weather;
+      const lockW = document.getElementById('lock-weather');
+      if (w) {
+        lockW.innerHTML = `<i class="ph-bold ${w.precip ? 'ph-cloud-rain' : 'ph-sun'} text-cyan-300"></i><span>국민대 ${escapeHtml(w.precip ?? '강수 없음')}${w.tempC != null ? ` · ${w.tempC}°C` : ''}</span>`;
+        lockW.classList.remove('hidden');
+        document.getElementById('sb-temp').textContent = w.tempC != null ? `${w.tempC}°` : '-';
+        document.getElementById('sb-weather').textContent = `${w.precip ?? '강수 없음'} · 기상청 초단기예보`;
+      } else {
+        document.getElementById('sb-weather').textContent = '하교 6시간 전부터 예보 반영';
+      }
+    }
+
+    // 데모 날짜·시각은 실제 지금으로
+    function fillDemoClock() {
+      const now = new Date();
+      document.getElementById('lock-date').textContent = now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+      document.getElementById('lock-time').textContent = hhmm(now.toISOString());
+      document.getElementById('phone-time').textContent = hhmm(now.toISOString());
+      document.getElementById('sb-day').textContent = now.toLocaleDateString('ko-KR', { weekday: 'long' });
+      document.getElementById('sb-date').textContent = now.getDate();
+      const today = classesOn(now.getDay());
+      document.getElementById('sb-sched').textContent = today.length ? `오늘 일정: ${today[today.length - 1].end} 하교` : '오늘 수업 없음';
+    }
+
+    // 피드의 고정 문구는 예시라고 표시 (서버 저장 전)
+    function markSampleReports() {
+      for (const el of document.querySelectorAll('#report-feed-list > div, #extra-feed-container > div')) {
+        el.classList.add('opacity-60');
+        const time = el.querySelector('.text-\\[10px\\]');
+        if (time) time.textContent = '예시';
       }
     }
 
@@ -1856,18 +1966,18 @@
       alarm.textContent = '계산 중…';
       routesBox.innerHTML = '';
       try {
-        const data = await fetchRecommend({ direction: 'school', arriveBy: next.start.getTime() });
+        const data = await fetchRecommend({ direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) });
         const [top] = data.routes;
         if (!top) throw new Error('경로를 찾지 못했어요');
         const leaveBy = new Date(top.leaveBy);
         const alarmAt = new Date(leaveBy.getTime() - prep * 60000);
         alarm.innerHTML = `${dayLabel} <span class="text-cyan-300">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
         const live = top.legs.some((l) => l.realtime);
-        reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분 + 강의실까지 ${data.classBufferMin}분 여유로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
+        reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
           + (live ? ' 실시간 도착 정보가 반영됐어요.' : ' 출발이 가까워지면 실시간 도착 정보로 다시 계산돼요. 지금은 평소 배차·혼잡도 기준이에요.');
-        document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → 국민대 정문`;
+        document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → ${data.to.name}`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
-        routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: '국민대 정문' });
+        routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
       } catch (e) {
         alarm.textContent = hasHome() ? '계산 실패' : '집 미등록';
         reason.innerHTML = hasHome() ? escapeHtml(e.message) : `집을 등록하면 첫 수업에 맞춘 알람 시각을 계산해요.<br>${REGISTER_HOME_BUTTON}`;
@@ -2070,7 +2180,7 @@
         </p>
       `;
       list.prepend(newReport);
-      triggerToast('제보가 등록되었습니다. 학우들에게 실시간 공유됩니다 (+10 P)');
+      triggerToast('제보를 기록했어요 (+10 P). 지금은 이 기기에만 보이고, 학우 공유는 준비 중이에요.');
     }
 
     function toggleFeedMore() {
@@ -2369,6 +2479,8 @@
     renderWalkPace();
     showWalkTripBar();
     renderTimetable();
+    fillDemoClock();
+    markSampleReports();
     loadHomeBriefing();
     loadExitStatus();
   </script>
