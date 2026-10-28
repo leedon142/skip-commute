@@ -700,7 +700,10 @@
                   <div class="text-[10px] text-slate-400 font-semibold">귀가 목적지 (집 주소 또는 역)</div>
                   <div class="flex items-center justify-between mt-0.5">
                     <span id="my-current-dest-txt" class="font-bold text-slate-800">연신내역</span>
-                    <button onclick="openEditDestModal()" class="text-blue-600 font-bold text-xs tap-press">수정</button>
+                    <div class="flex items-center gap-3">
+                      <button onclick="resetHome()" class="text-slate-400 hover:text-rose-600 font-bold text-xs tap-press">삭제</button>
+                      <button onclick="openEditDestModal()" class="text-blue-600 font-bold text-xs tap-press">수정</button>
+                    </div>
                   </div>
                   <div id="home-search" class="hidden mt-2 space-y-1.5">
                     <div class="flex gap-1.5">
@@ -845,7 +848,8 @@
     ];
 
     let currentUniv = UNIVERSITIES[0]; // 국민대학교
-    let homeDestination = (() => { try { return localStorage.getItem('skip.home') || '연신내역'; } catch { return '연신내역'; } })();
+    const DEFAULT_HOME = '연신내역';
+    let homeDestination = (() => { try { return localStorage.getItem('skip.home') || DEFAULT_HOME; } catch { return DEFAULT_HOME; } })();
     // 상세주소로 등록한 집 { name, address, lat, lng }. 없으면 homeDestination을 역 이름으로 사용
     let homePlace = (() => { try { return JSON.parse(localStorage.getItem('skip.homePlace')); } catch { return null; } })();
     let isFeedExpanded = false;
@@ -2051,6 +2055,23 @@
       triggerToast(`귀가 목적지를 ${r.name}(으)로 바꿨어요.`);
       renderTripDest();
       loadHomeBriefing();
+    }
+
+    // 등록한 집을 지우고 기본 목적지(연신내역)로 되돌림
+    function resetHome() {
+      if (!homePlace && homeDestination === DEFAULT_HOME) return triggerToast('지울 귀가 목적지가 없어요.');
+      homePlace = null;
+      homeDestination = DEFAULT_HOME;
+      try {
+        localStorage.removeItem('skip.homePlace');
+        localStorage.removeItem('skip.home');
+      } catch {}
+      document.getElementById('home-card-dest').innerText = homeDestination;
+      document.getElementById('my-current-dest-txt').innerText = homeDestination;
+      document.getElementById('home-search').classList.add('hidden');
+      renderTripDest();
+      loadHomeBriefing();
+      triggerToast(`귀가 목적지를 지우고 기본값(${DEFAULT_HOME})으로 돌렸어요.`);
     }
 
     function triggerToast(msg) {
