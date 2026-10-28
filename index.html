@@ -1460,6 +1460,10 @@
         </details>`;
     }
 
+    // 모든 경로에 운행 끝난 노선이 끼어 있으면 (심야) 시간만 보고 오해하지 않게 맨 위에 안내
+    const ALL_ENDED_NOTE = '<div class="m-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-700"><b>지금은 갈 수 있는 대중교통 경로가 없어요.</b> 아래 경로는 끊긴 노선이 섞여 있어 참고용이에요. 심야버스(N번)나 택시를 이용하거나, 첫차 시간에 다시 찾아 주세요.</div>';
+    const allEnded = (routes) => routes.length > 0 && routes.every((r) => r.unavailable);
+
     function weatherText(w) {
       if (!w) return '';
       return w.precip ? `${w.precip} 예보${w.tempC != null ? ` ${w.tempC}°C` : ''} · 도보 시간을 늘려 계산` : `강수 없음${w.tempC != null ? ` ${w.tempC}°C` : ''}`;
@@ -1569,7 +1573,7 @@
           + (data.fallback ? `<br><span class="text-amber-700">${escapeHtml(data.fallback)}</span>` : '')
           + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '')
           + basisSwitch;
-        box.innerHTML = renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        box.innerHTML = (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
       } catch (e) {
@@ -1607,6 +1611,12 @@
         const data = await fetchRecommend(basis.at ? { at: basis.at } : {});
         const [top, second] = data.routes;
         if (!top) throw new Error('경로를 찾지 못했어요');
+        if (allEnded(data.routes)) {
+          title.textContent = '지금은 운행이 끝났어요';
+          body.textContent = `${destLabel(data.destination)}까지 갈 수 있는 버스·지하철이 끊겼어요. 심야버스(N번)나 택시를 이용하거나, 첫차 시간에 다시 확인해 주세요.`;
+          eta.textContent = '-';
+          return;
+        }
         const first = top.legs.find((l) => l.type !== 'walk');
         title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천<br>${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
 
