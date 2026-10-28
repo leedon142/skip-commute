@@ -2,6 +2,7 @@
 // ODsay로 경로 후보를 받고, 각 구간을 서울시 실시간 도착·탑승 인원과 승하차 통계로 다시 계산한다.
 import { busStop, busStopsNear, subwayStation } from './_transit.js';
 import { findStation, searchPaths } from './_odsay.js';
+import { walkRoute } from './_walk.js';
 import profile from '../data/boarding_profile.json' with { type: 'json' };
 import subwayStats from '../data/subway_congestion.json' with { type: 'json' };
 
@@ -53,6 +54,14 @@ function distM(a, b) {
 
 function walkSecFromDist(m) {
   return Math.round((m * WALK_DETOUR) / WALK_M_PER_MIN * 60);
+}
+
+// 지도 보행 경로로 도보 시간 계산, 안 되면 직선거리 추정
+async function walkBetween(a, b) {
+  const osm = await walkRoute(a, b);
+  if (osm) return osm;
+  const d = distM(a, b);
+  return { sec: walkSecFromDist(d), distanceM: Math.round(d * WALK_DETOUR), source: 'estimate' };
 }
 
 // 통계 프로필에서 노선·정류장 위치 찾기
@@ -246,9 +255,9 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0) {
       if (sec > 0) {
         const overridden = !!firstWalkOverride && idx === 0;
         legs.push({
-          type: 'walk', minutes: Math.round(sec / 60), estimated: overridden,
+          type: 'walk', minutes: Math.round(sec / 60), estimated: overridden && firstWalkOverride.source !== 'osm',
           to: overridden ? firstWalkOverride.to : null,
-          distanceM: overridden ? null : sp.distance ?? null,
+          distanceM: overridden ? firstWalkOverride.distanceM ?? null : sp.distance ?? null,
           startAt: new Date(now + t * 1000).toISOString(),
         });
       }
@@ -283,7 +292,7 @@ export async function upstreamVariant(path, origin, nearStops) {
   if (!prevStop) return null;
   const d = distM(origin, prevStop);
   if (d > MAX_UPSTREAM_WALK_M) return null;
-  return { sec: walkSecFromDist(d), ars: prevStop.ars, to: prevStop.name };
+  return { ...(await walkBetween(origin, prevStop)), ars: prevStop.ars, to: prevStop.name };
 }
 
 function signature(r) {
@@ -322,12 +331,12 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     ? await busStopsNear(from.lat, from.lng, MAX_UPSTREAM_WALK_M).catch(() => [])
     : [];
 
-  const walkFromOrigin = (path, anchor) => {
+  const walkFromOrigin = async (path, anchor) => {
     if (!onCampus || distM(origin, anchor) < 30) return null;
     const first = path.subPath.find((sp) => sp.trafficType !== 3);
     if (!first?.startY) return null;
     const stop = { lat: Number(first.startY), lng: Number(first.startX) };
-    return { sec: walkSecFromDist(distM(origin, stop)), to: first.startName };
+    return { ...(await walkBetween(origin, stop)), to: first.startName };
   };
 
   // 등교는 첫 계산으로 소요 시간을 구한 뒤, 실제 출발 시각으로 한 번 더 계산 (혼잡도 시간대·실시간 반영)
@@ -341,7 +350,7 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   };
   const jobs = [];
   for (const { path, anchor } of paths) {
-    jobs.push(run(path, walkFromOrigin(path, anchor), []));
+    jobs.push(walkFromOrigin(path, anchor).then((w) => run(path, w, [])));
     jobs.push(upstreamVariant(path, from, nearStops).then((v) => v && run(path, v, [`${v.to}까지 걸어서 먼저 타기`])));
   }
   const results = (await Promise.all(jobs)).filter(Boolean);

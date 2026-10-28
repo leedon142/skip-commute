@@ -2,7 +2,21 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SKIP">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    // 폰(홈 화면에 추가한 앱, 또는 폰 브라우저)에서는 데모용 아이폰 틀 없이 앱만 전체 화면으로. ?app 으로 PC에서도 확인 가능
+    const APP_MODE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+      || matchMedia('(max-width: 520px)').matches || new URLSearchParams(location.search).has('app');
+    if (APP_MODE) document.documentElement.classList.add('app-mode');
+  </script>
   <title>스킵 (SKIP) - 캠퍼스 통학비서 AI Agent</title>
   <!-- Tailwind CSS & Phosphor Icons CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -48,6 +62,20 @@
       pointer-events: none !important;
     }
 
+    /* 앱 모드: 아이폰 틀·데모 툴바·가짜 상태바 숨기고 화면 전체 사용 */
+    html.app-mode body { padding: 0; background: #f1f5f9; }
+    html.app-mode body > header,
+    html.app-mode #phone-island,
+    html.app-mode #phone-status-bar,
+    html.app-mode #phone-bezel,
+    html.app-mode #app-home-indicator-area { display: none !important; }
+    html.app-mode main {
+      width: 100vw !important; height: 100dvh !important;
+      border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
+    }
+    html.app-mode #view-app > div:first-child { padding-top: calc(env(safe-area-inset-top) + 0.625rem); }
+    html.app-mode #view-app > nav { padding-bottom: calc(env(safe-area-inset-bottom) + 0.25rem); }
+    html.app-mode #app-toast { bottom: calc(env(safe-area-inset-bottom) + 4.5rem); }
     /* Home Indicator Styling */
     .home-bar-pill {
       width: 138px;
@@ -94,7 +122,7 @@
   <main class="relative w-[385px] h-[812px] bg-black rounded-[52px] phone-shadow overflow-hidden flex flex-col border-[4px] border-slate-800 shrink-0">
     
     <!-- Dynamic Island Pill -->
-    <div class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-50 flex items-center justify-between px-3 border border-slate-800/60 pointer-events-none">
+    <div id="phone-island" class="absolute top-2.5 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-50 flex items-center justify-between px-3 border border-slate-800/60 pointer-events-none">
       <div class="w-2.5 h-2.5 rounded-full bg-slate-900 flex items-center justify-center">
         <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
       </div>
@@ -778,7 +806,7 @@
     </div>
 
     <!-- Phone Hardware Bottom Bezel -->
-    <div class="w-full h-3 bg-black shrink-0"></div>
+    <div id="phone-bezel" class="w-full h-3 bg-black shrink-0"></div>
 
     <!-- ================= 35+ UNIVERSITY SELECTION MODAL ================= -->
     <div id="modal-univ" class="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end hidden">
@@ -858,7 +886,15 @@
       renderUniversityList();
       applyUnivContext(currentUniv);
       initHomeIndicatorGestures();
-      showLockScreen();
+      if (APP_MODE) {
+        showSkipAppDirect();
+        // ?tab=2 처럼 특정 탭으로 바로 열기 (홈 화면 바로가기용)
+        const tab = Number(new URLSearchParams(location.search).get('tab'));
+        switchTab(tab >= 1 && tab <= 5 ? tab : 1);
+      } else {
+        showLockScreen();
+      }
+      if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
     });
 
     // ================= ENHANCED DUAL-TRIGGER GESTURE ENGINE =================
@@ -1535,33 +1571,70 @@
       return d;
     }
 
+    // 과목마다 같은 색 (이름 기준)
+    const CLASS_COLORS = [
+      ['#dbeafe', '#2563eb'], ['#dcfce7', '#16a34a'], ['#fef3c7', '#d97706'], ['#fce7f3', '#db2777'],
+      ['#ede9fe', '#7c3aed'], ['#cffafe', '#0891b2'], ['#ffe4e6', '#e11d48'], ['#e0e7ff', '#4f46e5'],
+    ];
+    function classColor(name) {
+      let h = 0;
+      for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      return CLASS_COLORS[h % CLASS_COLORS.length];
+    }
+
+    function toMinutes(hm) {
+      const [h, m] = hm.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    // 주간 시간표 격자: 세로 = 시간, 가로 = 요일
     function renderTimetable() {
       const list = document.getElementById('timetable-list');
-      const days = [...new Set(timetable.map((c) => c.day))].sort();
-      list.innerHTML = days.map((day) => {
+      if (!timetable.length) {
+        list.innerHTML = '<div class="text-[11px] text-slate-500">등록된 수업이 없어요. 사진으로 등록하거나 아래에서 추가해 주세요.</div>';
+        return;
+      }
+      const days = timetable.some((c) => c.day === 6) ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+      const firstH = Math.min(9, ...timetable.map((c) => Math.floor(toMinutes(c.start) / 60)));
+      const lastH = Math.max(18, ...timetable.map((c) => Math.ceil(toMinutes(c.end) / 60)));
+      const PX_PER_MIN = 0.8;
+      const height = (lastH - firstH) * 60 * PX_PER_MIN;
+      const today = new Date().getDay();
+      const hours = Array.from({ length: lastH - firstH }, (_, i) => firstH + i);
+
+      const column = (day) => {
         const cs = classesOn(day);
-        return cs.map((c, i) => {
-          const idx = timetable.indexOf(c);
-          const first = i === 0, last = i === cs.length - 1;
-          const tone = first ? 'blue' : last ? 'emerald' : 'slate';
-          const triggers = [
-            first ? `<div class="text-[10px] text-emerald-600 font-semibold flex items-center gap-1"><i class="ph-bold ph-clock"></i> ${c.start} 첫 수업 · 등교 알람 기준</div>` : '',
-            last ? `<div class="text-[10px] text-rose-600 font-semibold flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> ${c.end} 수업 종료 · 하교 브리핑 기준</div>` : '',
-          ].join('');
-          return `
-            <div onclick="inspectClassTrigger(${idx})" class="p-3 rounded-xl bg-${tone}-50/60 border border-${tone}-100 cursor-pointer tap-press">
-              <div class="flex items-center justify-between text-[11px] text-${tone}-800 font-bold">
-                <span>${DAY_NAMES[c.day]}요일 (${c.start} - ${c.end})</span>
-                <span class="bg-${tone}-100 text-${tone}-900 px-2 py-0.5 rounded-full">${escapeHtml(c.room)}</span>
-              </div>
-              <div class="flex items-center justify-between mt-1">
-                <span class="font-bold text-xs text-slate-900">${escapeHtml(c.name)}</span>
-                <button onclick="event.stopPropagation(); removeClass(${idx})" class="text-[10px] text-slate-400 hover:text-rose-600">삭제</button>
-              </div>
-              ${triggers ? `<div class="mt-1 space-y-0.5">${triggers}</div>` : ''}
-            </div>`;
-        }).join('');
-      }).join('') || '<div class="text-[11px] text-slate-500">등록된 수업이 없어요</div>';
+        return `
+          <div class="relative flex-1 min-w-0 border-l border-slate-100 ${day === today ? 'bg-blue-50/40' : ''}" style="height:${height}px">
+            ${hours.map((h) => `<div class="absolute left-0 right-0 border-t border-slate-100" style="top:${(h - firstH) * 60 * PX_PER_MIN}px"></div>`).join('')}
+            ${cs.map((c, i) => {
+              const idx = timetable.indexOf(c);
+              const top = (toMinutes(c.start) - firstH * 60) * PX_PER_MIN;
+              const h = (toMinutes(c.end) - toMinutes(c.start)) * PX_PER_MIN;
+              const [bg, fg] = classColor(c.name);
+              const last = i === cs.length - 1;
+              return `
+                <button onclick="inspectClassTrigger(${idx})" class="absolute left-0.5 right-0.5 rounded-md px-1 py-0.5 text-left overflow-hidden tap-press"
+                  style="top:${top + 1}px;height:${h - 2}px;background:${bg};border-left:3px solid ${fg}">
+                  <div class="text-[10px] font-bold leading-tight text-slate-900 break-keep">${escapeHtml(c.name)}</div>
+                  ${h > 40 ? `<div class="text-[9px] leading-tight text-slate-500 truncate">${escapeHtml(c.room)}</div>` : ''}
+                  ${last ? `<i class="ph-bold ph-bell-ringing absolute bottom-0.5 right-0.5 text-[9px]" style="color:${fg}" title="하교 브리핑 기준"></i>` : ''}
+                </button>`;
+            }).join('')}
+          </div>`;
+      };
+
+      list.innerHTML = `
+        <div class="flex text-[10px] font-bold text-slate-500 mb-1 pl-5">
+          ${days.map((d) => `<div class="flex-1 text-center ${d === today ? 'text-blue-600' : ''}">${DAY_NAMES[d]}</div>`).join('')}
+        </div>
+        <div class="flex">
+          <div class="relative w-5 shrink-0" style="height:${height}px">
+            ${hours.map((h) => `<div class="absolute right-1 text-[9px] text-slate-400 -translate-y-1/2" style="top:${(h - firstH) * 60 * PX_PER_MIN}px">${h}</div>`).join('')}
+          </div>
+          ${days.map(column).join('')}
+        </div>
+        <div class="mt-1.5 text-[10px] text-slate-400 flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> 요일별 마지막 수업이 끝나는 시각에 하교 경로를 계산해요. 과목을 누르면 자세히 볼 수 있어요.</div>`;
     }
 
     function addClass() {
@@ -1676,6 +1749,7 @@
 
     function removeClass(idx) {
       const [c] = timetable.splice(idx, 1);
+      document.getElementById('class-inspect-box').innerHTML = '<div class="text-[11px] text-slate-500">과목을 누르면 통학 계산에 어떻게 쓰이는지 볼 수 있어요.</div>';
       saveTimetable();
       renderTimetable();
       loadHomeBriefing();
@@ -1883,8 +1957,9 @@
           <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
         </div>
         <div class="text-[11px] text-slate-600">
-          강의실: <strong>${escapeHtml(c.room)}</strong><br>${role}
+          강의실: <strong>${escapeHtml(c.room || '-')}</strong><br>${role}
         </div>
+        <button onclick="removeClass(${idx})" class="mt-2 text-[11px] font-bold text-rose-600 tap-press">이 수업 삭제</button>
       `;
     }
 
