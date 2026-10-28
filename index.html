@@ -16,6 +16,24 @@
     const APP_MODE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
       || matchMedia('(max-width: 520px)').matches || new URLSearchParams(location.search).has('app');
     if (APP_MODE) document.documentElement.classList.add('app-mode');
+
+    // 사용 통계 (Vercel Web Analytics, 쿠키·개인 식별 없음). ?me 로 한 번 연 기기는 계속 집계에서 빠짐
+    let TRACK = true;
+    try {
+      if (new URLSearchParams(location.search).has('me')) localStorage.setItem('skip.noTrack', '1');
+      TRACK = !localStorage.getItem('skip.noTrack') && location.protocol === 'https:';
+    } catch {}
+    if (TRACK) {
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      const s = document.createElement('script');
+      s.defer = true;
+      s.src = '/_vercel/insights/script.js';
+      document.head.appendChild(s);
+    }
+    // 무료 요금제는 커스텀 이벤트가 없어서, 기능 사용을 '/기능/...' 페이지 방문으로 기록
+    function track(name) {
+      if (TRACK) window.va('pageview', { route: `/기능/${name}`, path: `/기능/${name}` });
+    }
   </script>
   <title>스킵 (SKIP) - 캠퍼스 통학비서 AI Agent</title>
   <!-- Tailwind CSS & Phosphor Icons CDN -->
@@ -913,6 +931,7 @@
       } else {
         showLockScreen();
       }
+      if (new URLSearchParams(location.search).has('me')) setTimeout(() => triggerToast('이 기기는 사용 통계에서 빠져요.'), 800);
       if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
     });
 
@@ -1080,7 +1099,10 @@
     }
 
     // 5-Tab Navigation Controller
+    const TAB_NAMES = { 1: '홈', 2: '시간표', 3: '실시간통학', 4: '정류장제보', 5: '내정보' };
+
     function switchTab(tabIndex) {
+      track(`탭-${TAB_NAMES[tabIndex]}`);
       for (let i = 1; i <= 5; i++) {
         const pane = document.getElementById(`tab-pane-${i}`);
         const navBtn = document.getElementById(`nav-tab-${i}`);
@@ -1446,6 +1468,7 @@
     }
 
     async function runRecommend(useNow = false) {
+      track(tripDest ? '하교추천-다른곳' : '하교추천');
       const box = document.getElementById('rec-results');
       const meta = document.getElementById('rec-meta');
       if (location.protocol === 'file:') {
@@ -1720,6 +1743,7 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
+        track('시간표사진-인식');
         importedClasses = data.classes.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
         renderImportPreview();
         triggerToast(`시간표에서 ${importedClasses.length}개 수업을 읽었어요. 시간표 탭에서 확인해 주세요`);
@@ -1765,6 +1789,7 @@
     }
 
     function applyImportedTimetable() {
+      track('시간표사진-저장');
       if (!importedClasses.length) return triggerToast('저장할 수업이 없어요');
       const bad = importedClasses.find((c) => !c.name || !c.start || !c.end || c.end <= c.start);
       if (bad) return triggerToast(`${bad.name || '이름 없는 수업'}의 시간을 확인해 주세요`);
@@ -2020,6 +2045,7 @@
     }
 
     async function submitReport(statusText) {
+      track('정류장제보');
       const stop = await locateReportStop();
       if (!stop) return triggerToast('정류장 근처에서만 제보할 수 있어요');
       let last = {};
@@ -2177,6 +2203,7 @@
     }
 
     function setHomePlace(i) {
+      track('집등록');
       const r = placeResults['home-results'][i];
       homePlace = { name: r.name, address: r.address, lat: r.lat, lng: r.lng };
       homeDestination = r.name;
@@ -2287,6 +2314,7 @@
     }
 
     function startWalkTrip(i) {
+      track('걸음측정-시작');
       const walk = lastRoutes[i]?.legs[0];
       if (walk?.type !== 'walk' || !walk.baseSec) return;
       const trip = { startAt: Date.now(), to: walk.to, toPos: walk.toPos, baseSec: walk.baseSec, expectedSec: walk.sec };
@@ -2302,6 +2330,7 @@
 
     function finishWalkTrip(auto = false) {
       const trip = activeWalkTrip();
+      if (trip) track(auto ? '걸음측정-GPS도착' : '걸음측정-버튼도착');
       cancelWalkTrip();
       if (!trip) return;
       const measuredSec = Math.round((Date.now() - trip.startAt) / 1000);
