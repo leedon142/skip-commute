@@ -555,7 +555,7 @@
                       <div id="trip-results" class="space-y-1"></div>
                     </div>
                   </div>
-                  <button onclick="runRecommend()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
+                  <button onclick="runRecommend(false, false, true)" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
                     내 위치로 최적 경로 찾기
                   </button>
                   <div id="rec-meta" class="text-[10px] text-slate-500"></div>
@@ -1099,8 +1099,11 @@
     // 5-Tab Navigation Controller
     const TAB_NAMES = { 1: '홈', 2: '시간표', 3: '실시간통학', 4: '정류장제보', 5: '내정보' };
 
+    let activeTab = 1;
+
     function switchTab(tabIndex) {
       track(`탭-${TAB_NAMES[tabIndex]}`);
+      activeTab = tabIndex;
       for (let i = 1; i <= 5; i++) {
         const pane = document.getElementById(`tab-pane-${i}`);
         const navBtn = document.getElementById(`nav-tab-${i}`);
@@ -1265,8 +1268,10 @@
       return Boolean(homePlace || homeDestination);
     }
 
-    // 내 정보 탭으로 가서 집 검색창을 열어 줌
+    // 내 정보 탭으로 가서 집 검색창을 열어 줌. 등록하면 원래 보던 탭으로 돌아감
+    let returnTabAfterHome = null;
     function goRegisterHome() {
+      returnTabAfterHome = activeTab !== 5 ? activeTab : null;
       switchTab(5);
       document.getElementById('home-search').classList.remove('hidden');
       document.getElementById('home-q').focus();
@@ -1521,7 +1526,8 @@
       }, wait);
     }
 
-    async function runRecommend(useNow = false, forceGate = false) {
+    // byUser: 버튼을 직접 눌렀을 때만 검색창 열고 안내 (탭 들어올 때 자동 실행에선 키보드 안 띄움)
+    async function runRecommend(useNow = false, forceGate = false, byUser = false) {
       track(tripDest ? '하교추천-다른곳' : '하교추천');
       const box = document.getElementById('rec-results');
       const meta = document.getElementById('rec-meta');
@@ -1530,8 +1536,14 @@
         return;
       }
       if (!hasHome() && !tripDest) {
+        // 도착지가 없으면 그 자리에서 바로 검색창을 열어 줌 (같은 안내만 다시 그리면 눌러도 반응 없는 것처럼 보임)
         meta.textContent = '';
-        box.innerHTML = `<div class="p-3 text-slate-600">집을 등록하거나 '다른 곳'에서 도착지를 골라 주세요.<br>${REGISTER_HOME_BUTTON}</div>`;
+        box.innerHTML = `<div class="p-3 text-slate-600">어디로 갈지 먼저 정해 주세요. 위 검색창에 가려는 곳을 입력하거나, 집을 등록하면 다음부터 바로 찾아요.<br>${REGISTER_HOME_BUTTON}</div>`;
+        if (byUser) {
+          document.getElementById('trip-search').classList.remove('hidden');
+          document.getElementById('trip-q').focus();
+          triggerToast('도착지가 아직 없어요. 가려는 곳을 검색해 주세요.');
+        }
         return;
       }
       const basis = useNow ? { at: null, label: '지금 출발 기준' } : dismissalBasis();
@@ -2327,6 +2339,13 @@
       triggerToast(`귀가 목적지를 ${r.name}(으)로 바꿨어요.`);
       renderHomeName();
       loadHomeBriefing();
+      // 하교 화면에서 등록하러 왔으면 돌아가서 바로 경로 찾기
+      const back = returnTabAfterHome;
+      returnTabAfterHome = null;
+      if (back) {
+        switchTab(back);
+        if (back === 3) runRecommend();
+      }
     }
 
     // 등록한 집을 지움 → 다시 등록 안내 상태로
