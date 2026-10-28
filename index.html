@@ -1224,12 +1224,12 @@
     function getPosition() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) return resolve(null);
-        // 권한 팝업에 응답이 없으면 정문 기준으로 진행
-        setTimeout(() => resolve(null), 10000);
+        // 권한 팝업에 응답이 없거나 GPS가 늦으면 4초 뒤 정문 기준으로 진행
+        setTimeout(() => resolve(null), 4000);
         navigator.geolocation.getCurrentPosition(
           (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) }),
           () => resolve(null),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+          { enableHighAccuracy: true, timeout: 3500, maximumAge: 30000 },
         );
       });
     }
