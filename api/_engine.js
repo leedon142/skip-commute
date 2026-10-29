@@ -372,6 +372,14 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, w
     const leg = sp.trafficType === 2
       ? await busLeg(sp, t, now, isFirstRide ? firstWalkOverride?.ars : undefined, ctx)
       : await subwayLeg(sp, t, now);
+    // 실시간 길안내용 좌표: 탑승·하차 정류장, 하차 직전 정류장(내릴 준비 안내), 지하철 나갈 출구
+    const pos = (y, x) => (y && x ? { lat: Number(y), lng: Number(x) } : null);
+    leg.fromPos = (isFirstRide && firstWalkOverride?.ars && firstWalkOverride.toPos) || pos(sp.startY, sp.startX);
+    leg.toPos = pos(sp.endY, sp.endX);
+    const passed = sp.passStopList?.stations ?? [];
+    const before = passed.length >= 3 ? passed[passed.length - 2] : null;
+    leg.preStop = before ? { name: before.stationName, ...pos(before.y, before.x) } : null;
+    if (sp.trafficType === 1 && sp.endExitNo) leg.exitNo = sp.endExitNo;
     leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
     t += leg.waitSec + leg.extraWaitSec + sp.sectionTime * 60;
     parts.waitSec += leg.waitSec;

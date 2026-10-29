@@ -31,7 +31,23 @@ function fileCache(file) {
   };
 }
 
+// 유료(건당 25원) 키 보호용 하루 호출 상한. 넘으면 한도 초과와 똑같이 저장본·서울시 경로로 넘어감
+// ODSAY_DAILY_LIMIT로 조절, 기본은 배포 300회(최대 하루 7,500원) / 로컬 30회
+const DAILY_LIMIT = Number(process.env.ODSAY_DAILY_LIMIT) || (process.env.VERCEL ? 300 : 30);
+
+// 날짜별 호출 수 (KST). 동시 요청이 겹치면 몇 회 정도 오차가 날 수 있음
+async function countCall() {
+  const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const key = `count:${day}`;
+  const used = Number(await cache.get(key).catch(() => 0)) || 0;
+  if (used >= DAILY_LIMIT) {
+    throw new HttpError(429, `오늘 길찾기 호출 상한(${DAILY_LIMIT}회)에 도달했어요. 저장된 경로나 서울시 경로로 대신 찾아요.`);
+  }
+  await cache.set(key, used + 1, { ttl: 2 * 24 * 3600, name: 'count' }).catch(() => {});
+}
+
 async function odsay(path, params) {
+  await countCall();
   const qs = new URLSearchParams({ ...params, apiKey: requireEnv('ODSAY_KEY') });
   // Vercel은 서버 IP가 고정이 아니라 IP 방식 키를 못 씀 → 웹(URI) 방식 키를 쓰고 등록한 도메인을 Referer로 보냄
   const headers = process.env.ODSAY_REFERER ? { Referer: process.env.ODSAY_REFERER } : {};

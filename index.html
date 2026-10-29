@@ -93,6 +93,8 @@
     }
     html.app-mode #view-app > div:first-child { padding-top: calc(env(safe-area-inset-top) + 0.625rem); }
     html.app-mode #view-app > nav { padding-bottom: calc(env(safe-area-inset-bottom) + 0.25rem); }
+    /* 길안내 중엔 걸음 측정 바는 숨김 (측정은 계속) */
+    body.nav-on #walk-trip-bar { display: none !important; }
     html.app-mode #app-toast { bottom: calc(env(safe-area-inset-bottom) + 4.5rem); }
     /* Home Indicator Styling */
     .home-bar-pill {
@@ -793,6 +795,21 @@
         </div>
 
         <!-- 걷는 중: 정류장에 도착하면 '도착'을 눌러 내 걸음 속도 측정 -->
+        <!-- 실시간 길안내: 지금 할 일, 남은 거리, 음성 켜기/끄기 -->
+        <div id="nav-bar" class="hidden bg-blue-700 text-white px-3.5 py-2.5 shrink-0 z-20 text-xs">
+          <div class="flex items-center gap-2">
+            <i class="ph-bold ph-navigation-arrow text-cyan-300 text-base"></i>
+            <div class="flex-1 min-w-0">
+              <div class="text-[10px] text-blue-100"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
+              <div id="nav-label" class="font-extrabold truncate"></div>
+            </div>
+            <button id="nav-mute" onclick="toggleNavMute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="음성 켜기/끄기"></button>
+            <button onclick="advanceNav(true)" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press">다음</button>
+            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white text-blue-700 font-extrabold tap-press">종료</button>
+          </div>
+          <div id="nav-say" class="mt-1 text-[11px] text-blue-50 leading-snug"></div>
+        </div>
+
         <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
           <i class="ph-bold ph-person-simple-walk text-cyan-300 text-base"></i>
           <div class="flex-1 min-w-0">
@@ -1401,11 +1418,11 @@
 
     function renderRouteDetail(r, dest, i, morning) {
       const firstWalk = r.legs[0]?.type === 'walk' && r.legs[0].to ? r.legs[0] : null;
-      const startButton = !morning && firstWalk
-        ? `<button onclick="startWalkTrip(${i})" class="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 tap-press">
-             <i class="ph-bold ph-person-simple-walk"></i> 이 경로로 출발 · ${escapeHtml(firstWalk.to)}까지 걸음 측정
-           </button>`
-        : '';
+      const startButton = r.unavailable ? '' : `
+        <button onclick="startNavigation(${i}, ${morning})" class="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 tap-press">
+          <i class="ph-bold ph-navigation-arrow"></i> 이 경로로 안내 시작${!morning && firstWalk ? ` · ${escapeHtml(firstWalk.to)}까지 걸음 측정` : ''}
+        </button>
+        <div class="text-[10px] text-slate-400 text-center">위치를 따라가며 음성으로 안내해요. 화면을 켜 둔 채 앱을 앞에 두세요.</div>`;
       const rides = r.legs.filter((l) => l.type !== 'walk');
       const walkMin = r.legs.filter((l) => l.type === 'walk').reduce((a, l) => a + l.minutes, 0);
       const items = r.legs.map((l) => l.type === 'walk'
@@ -1470,9 +1487,13 @@
     }
 
     let lastRoutes = [];
+    let lastMorningRoutes = [];
+    let lastDest = null;
+    let lastMorningDest = null;
 
     function renderRoutes(routes, { morning = false, dest = '' } = {}) {
       if (!morning) lastRoutes = routes;
+      else lastMorningRoutes = routes;
       return routes.map((r, i) => `
           <div class="px-3.5 py-2.5 ${r.unavailable ? 'opacity-50' : i === 0 ? 'bg-blue-50/60' : ''}">
             <div onclick="toggleRoute(this)" class="space-y-1.5 cursor-pointer">
@@ -1573,6 +1594,7 @@
           + (data.fallback ? `<br><span class="text-amber-700">${escapeHtml(data.fallback)}</span>` : '')
           + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '')
           + basisSwitch;
+        lastDest = { name: destLabel(data.destination), lat: data.destination.lat, lng: data.destination.lng };
         box.innerHTML = (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
@@ -2016,6 +2038,7 @@
           + (live ? ' 실시간 도착 정보가 반영됐어요.' : ' 출발이 가까워지면 실시간 도착 정보로 다시 계산돼요. 지금은 평소 배차·혼잡도 기준이에요.');
         document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → ${data.to.name}`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
+        lastMorningDest = { name: data.to.name, lat: data.to.lat, lng: data.to.lng };
         routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
       } catch (e) {
         alarm.textContent = hasHome() ? '계산 실패' : '집 미등록';
@@ -2469,14 +2492,14 @@
       walkTripTimer = setInterval(tick, 1000);
     }
 
-    function startWalkTrip(i) {
+    function startWalkTrip(i, quiet = false) {
       track('걸음측정-시작');
       const walk = lastRoutes[i]?.legs[0];
       if (walk?.type !== 'walk' || !walk.baseSec) return;
       const trip = { startAt: Date.now(), to: walk.to, toPos: walk.toPos, baseSec: walk.baseSec, expectedSec: walk.sec };
       try { localStorage.setItem(WALK_TRIP_KEY, JSON.stringify(trip)); } catch {}
       showWalkTripBar();
-      triggerToast(`${walk.to} 근처에 오면 자동으로 측정을 끝내요. 화면은 켜 둬 주세요.`);
+      if (!quiet) triggerToast(`${walk.to} 근처에 오면 자동으로 측정을 끝내요. 화면은 켜 둬 주세요.`);
     }
 
     function cancelWalkTrip() {
@@ -2502,6 +2525,186 @@
       triggerToast(`${auto ? `${trip.to} 도착! ` : ''}예상 ${fmtElapsed(trip.expectedSec)} → 실제 ${fmtElapsed(measuredSec)}. 내 걸음 속도(${walkFactor().toFixed(2)}배)에 반영했어요.`);
     }
 
+    // ---------------- 실시간 길안내 (GPS 추적 + 음성) ----------------
+    // 추천 경로의 실제 정류장 좌표로 단계를 만들고, 각 단계 목표 반경에 들어오면 다음 안내를 말함.
+    // 지하철은 지하라 GPS가 잘 안 잡혀서 예상 도착 시각으로도 넘어감 (버스도 GPS가 1분 넘게 안 오면 시각 기준)
+    const NAV_KEY = 'skip.nav';
+    const NAV_GPS_STALE_MS = 60000;
+    let navWatchId = null;
+    let navTimer = null;
+    let navWakeLock = null;
+    let navLastFix = 0;
+
+    function navState() {
+      try { return JSON.parse(localStorage.getItem(NAV_KEY)); } catch { return null; }
+    }
+    function saveNav(nav) {
+      try { nav ? localStorage.setItem(NAV_KEY, JSON.stringify(nav)) : localStorage.removeItem(NAV_KEY); } catch {}
+    }
+    function navMuted() {
+      try { return localStorage.getItem('skip.navMute') === '1'; } catch { return false; }
+    }
+
+    function speak(text) {
+      navigator.vibrate?.(200);
+      if (navMuted() || !('speechSynthesis' in window)) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      speechSynthesis.speak(u);
+    }
+
+    // 지하철역은 '역'을 붙여 읽기
+    function placeName(l, end) {
+      const name = end === 'from' ? l.from : l.to;
+      return l.type === 'subway' && !/역$/.test(name) ? `${name}역` : name;
+    }
+
+    function buildNavSteps(r, dest) {
+      const steps = [];
+      let walkMin = 0;
+      let prev = null;
+      const getOff = (l) => `${placeName(l, 'to')}에서 내리세요.${l.exitNo ? ` ${l.exitNo}번 출구로 나가세요.` : ''}`;
+      for (const l of r.legs) {
+        if (l.type === 'walk') { walkMin += l.minutes; continue; }
+        const from = placeName(l, 'from');
+        const to = placeName(l, 'to');
+        const vehicle = l.type === 'bus' ? `${l.route}번 버스` : `${rideName(l)}${l.way ? ` ${l.way} 방면` : ''}`;
+        const subway = l.type === 'subway';
+        const arrive = Date.parse(l.arriveAt);
+        steps.push({
+          label: `${from}까지 걷기`,
+          say: prev
+            ? `${getOff(prev)} ${from}까지 걸어서 갈아타세요${walkMin ? `, 약 ${walkMin}분` : ''}.`
+            : `길안내를 시작할게요. ${from}까지 걸어가세요${walkMin ? `. 약 ${walkMin}분 걸려요` : ''}.`,
+          target: l.fromPos, radius: subway ? 60 : 30,
+        });
+        steps.push({
+          label: `${vehicle} 타기`,
+          say: `${from}에 도착했어요. ${vehicle}를 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
+          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - 150e3, underground: subway,
+        });
+        steps.push({
+          label: `${to}에서 내리기`,
+          say: `곧 ${to}이에요. 다음 ${subway ? '역' : '정류장'}에서 내릴 준비를 하세요.`,
+          target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - 20e3, underground: subway,
+        });
+        prev = l;
+        walkMin = 0;
+      }
+      steps.push({
+        label: `${dest.name}까지 걷기`,
+        say: prev ? `${getOff(prev)} ${dest.name}까지 걸어서${walkMin ? ` 약 ${walkMin}분이에요` : ' 가세요'}.` : `${dest.name}까지 걸어가세요.`,
+        target: dest.lat ? { lat: dest.lat, lng: dest.lng } : null, radius: 40,
+      });
+      return steps;
+    }
+
+    function startNavigation(i, morning) {
+      const r = (morning ? lastMorningRoutes : lastRoutes)[i];
+      const dest = morning ? lastMorningDest : lastDest;
+      if (!r || !dest) return triggerToast('경로를 다시 찾은 뒤 시작해 주세요.');
+      track('길안내-시작');
+      const nav = { steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now() };
+      saveNav(nav);
+      // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
+      if (!morning && r.legs[0]?.type === 'walk' && r.legs[0].to) startWalkTrip(i, true);
+      speak(nav.steps[0].say);
+      resumeNavigation();
+      triggerToast('길안내를 시작했어요. 화면을 켜 둔 채 걸어 주세요.');
+    }
+
+    function resumeNavigation() {
+      const nav = navState();
+      const bar = document.getElementById('nav-bar');
+      clearInterval(navTimer);
+      if (navWatchId != null) navigator.geolocation?.clearWatch(navWatchId);
+      navWatchId = null;
+      // 3시간 넘은 안내는 정리
+      if (!nav || Date.now() - nav.startedAt > 3 * 3600e3) {
+        saveNav(null);
+        bar.classList.add('hidden');
+        document.body.classList.remove('nav-on');
+        navWakeLock?.release?.().catch(() => {});
+        navWakeLock = null;
+        return;
+      }
+      bar.classList.remove('hidden');
+      document.body.classList.add('nav-on');
+      renderNavBar(nav, null);
+      // 안내 중엔 화면이 꺼지지 않게 (지원하는 브라우저만)
+      navigator.wakeLock?.request('screen').then((l) => { navWakeLock = l; }).catch(() => {});
+      if (navigator.geolocation) {
+        navWatchId = navigator.geolocation.watchPosition((p) => {
+          navLastFix = Date.now();
+          const cur = navState();
+          const step = cur?.steps[cur.idx];
+          if (!step) return;
+          const here = { lat: p.coords.latitude, lng: p.coords.longitude };
+          const d = step.target ? metersBetween(here, step.target) : null;
+          renderNavBar(cur, d);
+          // GPS 오차만큼 넓게 보되 반경의 2배까지만
+          if (d != null && d <= Math.min(step.radius * 2, Math.max(step.radius, p.coords.accuracy))) advanceNav();
+        }, () => {
+          document.getElementById('nav-dist').textContent = 'GPS 안 잡힘 · 예상 시각으로 안내';
+        }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+      }
+      // 지하·GPS 끊김 대비: 예상 시각이 지나면 다음 단계로
+      navTimer = setInterval(() => {
+        const cur = navState();
+        const step = cur?.steps[cur.idx];
+        if (!step?.timeAt) return;
+        const gpsStale = Date.now() - navLastFix > NAV_GPS_STALE_MS;
+        if ((step.underground || gpsStale || !step.target) && Date.now() >= step.timeAt) advanceNav();
+      }, 5000);
+    }
+
+    function renderNavBar(nav, dist) {
+      const step = nav.steps[nav.idx];
+      document.getElementById('nav-step').textContent = `${nav.idx + 1}/${nav.steps.length}단계`;
+      document.getElementById('nav-label').textContent = step.label;
+      document.getElementById('nav-say').textContent = step.say;
+      if (dist != null) document.getElementById('nav-dist').textContent = `남은 거리 ${dist >= 1000 ? `${(dist / 1000).toFixed(1)}km` : `${Math.round(dist)}m`}`;
+      else if (!step.target) document.getElementById('nav-dist').textContent = '예상 시각으로 안내';
+      document.getElementById('nav-mute').innerHTML = navMuted() ? '<i class="ph-bold ph-speaker-slash"></i>' : '<i class="ph-bold ph-speaker-high"></i>';
+    }
+
+    function advanceNav(manual = false) {
+      const nav = navState();
+      if (!nav) return;
+      nav.idx += 1;
+      if (nav.idx >= nav.steps.length) {
+        speak(`${nav.dest}에 도착했어요. 길안내를 마칠게요.`);
+        track('길안내-도착');
+        saveNav(null);
+        resumeNavigation();
+        return triggerToast(`${nav.dest} 도착 · 길안내를 마쳤어요.`);
+      }
+      saveNav(nav);
+      speak(nav.steps[nav.idx].say);
+      renderNavBar(nav, null);
+      if (manual) document.getElementById('nav-dist').textContent = '위치 확인 중';
+    }
+
+    function stopNavigation() {
+      saveNav(null);
+      speechSynthesis?.cancel?.();
+      resumeNavigation();
+      triggerToast('길안내를 종료했어요.');
+    }
+
+    function toggleNavMute() {
+      try { localStorage.setItem('skip.navMute', navMuted() ? '0' : '1'); } catch {}
+      if (navMuted()) speechSynthesis?.cancel?.();
+      const nav = navState();
+      if (nav) renderNavBar(nav, null);
+    }
+
+    // 화면을 다시 켜면 화면 켜짐 유지 다시 요청
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navState()) navigator.wakeLock?.request('screen').then((l) => { navWakeLock = l; }).catch(() => {});
+    });
+
     function resetWalkSamples() {
       try { localStorage.removeItem(WALK_SAMPLES_KEY); } catch {}
       renderWalkPace();
@@ -2524,6 +2727,7 @@
     renderHomeName();
     renderWalkPace();
     showWalkTripBar();
+    resumeNavigation();
     renderTimetable();
     fillDemoClock();
     markSampleReports();
