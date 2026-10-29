@@ -97,6 +97,20 @@
     body.nav-on #walk-trip-bar { display: none !important; }
     html.app-mode #app-toast { bottom: calc(env(safe-area-inset-bottom) + 4.5rem); }
     /* Home Indicator Styling */
+    /* 가독성: 앱 화면 안의 작은 글씨를 한 단계씩 키움. 시간표 격자는 칸이 좁아서 제외 */
+    #app-scroll-content .text-\[9px\] { font-size: 10.5px; }
+    #app-scroll-content .text-\[10px\] { font-size: 11.5px; line-height: 1.45; }
+    #app-scroll-content .text-\[11px\] { font-size: 12.5px; line-height: 1.5; }
+    #app-scroll-content .text-xs { font-size: 13px; line-height: 1.5; }
+    #app-scroll-content #timetable-list .text-\[9px\] { font-size: 9px; }
+    #app-scroll-content #timetable-list .text-\[10px\] { font-size: 10px; line-height: 1.25; }
+    #app-scroll-content > div > * + * { margin-top: 0.875rem; }
+    /* 시연 화면 표시 (실제 데이터와 구분) */
+    .demo-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px;
+      background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 10px; font-weight: 700; }
+    .live-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 9999px;
+      background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 10px; font-weight: 700; }
+
     .home-bar-pill {
       width: 138px;
       height: 5px;
@@ -114,6 +128,10 @@
       <span>스킵 (SKIP) 캠퍼스 능동형 통학비서</span>
     </div>
     
+    <div class="text-[11px] text-slate-400 text-center leading-relaxed">
+      <span class="demo-chip">시연용</span> 아래 잠금화면·아이폰 홈·푸시 배너는 발표용 틀이에요.
+      <span class="text-emerald-400 font-bold">앱 안의 경로·도착·혼잡 정보는 실제 데이터</span>예요.
+    </div>
     <div class="flex flex-wrap items-center justify-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl shadow-xl backdrop-blur-md">
       <button onclick="showLockScreen()" id="btn-ctrl-lock" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-lock-simple text-amber-400"></i>
@@ -129,7 +147,7 @@
       </button>
       <button onclick="triggerSimulatedPush()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-bell-ringing text-rose-400"></i>
-        <span>🔔 실시간 푸시</span>
+        <span>🔔 푸시 미리보기</span>
       </button>
       <button onclick="openUnivModal()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-buildings text-cyan-400"></i>
@@ -167,6 +185,7 @@
           <div class="w-4 h-4 rounded-md bg-blue-600 text-white flex items-center justify-center text-[9px] font-black">⚡</div>
           <span class="font-bold text-slate-800">스킵 통학비서</span>
           <span class="text-slate-400">· 방금 전</span>
+          <span class="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold">시연 화면</span>
         </div>
         <button onclick="dismissPush()" class="text-slate-400 hover:text-slate-600 p-0.5">
           <i class="ph-bold ph-x text-xs"></i>
@@ -199,6 +218,7 @@
         
         <!-- Top Clock & Date Area -->
         <div class="text-center mt-6">
+          <div class="demo-chip mb-2">시연 화면 · 알림 내용은 실제 추천 값</div>
           <div id="lock-date" class="text-sm text-slate-400 font-medium"></div>
           <div id="lock-time" class="text-6xl font-light tracking-tight mt-1 font-mono"></div>
           <div id="lock-weather" class="hidden mt-3 inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-xs text-slate-200 border border-white/10"></div>
@@ -251,6 +271,7 @@
       <!-- ============================================================= -->
       <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);">
         
+        <div class="text-center -mb-2"><span class="demo-chip">시연 화면 · 실제 아이폰 홈 아님</span></div>
         <!-- Springboard Top Grid & Widgets -->
         <div class="space-y-4 pt-4">
           <!-- Calendar / Weather Twin Widget -->
@@ -415,7 +436,22 @@
                 <span id="brief-basis" class="text-blue-200 text-[11px] font-mono"></span>
               </div>
               <h2 id="brief-title" class="text-base font-extrabold leading-snug">실시간 경로 계산 중…</h2>
-              <p id="brief-body" class="text-xs text-blue-100 mt-1 leading-relaxed"></p>
+              <!-- 출발 시각 · 추천 경로 (계산되면 보임) -->
+              <div id="brief-main" class="hidden mt-2.5 space-y-2">
+                <div class="flex items-end gap-2">
+                  <div>
+                    <div class="text-[10px] text-blue-200">출발</div>
+                    <div id="brief-leave" class="text-3xl font-black leading-none text-amber-300"></div>
+                  </div>
+                  <div id="brief-board" class="text-xs text-blue-100 pb-0.5"></div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-blue-200 mb-1">추천 경로</div>
+                  <div id="brief-route" class="flex flex-wrap items-center gap-1 text-xs font-bold"></div>
+                </div>
+                <div class="text-[10px] text-blue-200">추천 이유</div>
+              </div>
+              <div id="brief-body" class="text-xs text-blue-100 mt-1 leading-relaxed"></div>
 
               <!-- Destination & Travel Time Grid -->
               <div class="mt-3 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 grid grid-cols-2 gap-2 text-xs">
@@ -443,8 +479,9 @@
                   <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   캠퍼스 주요 출구 실시간 현황
                 </span>
-                <span id="exit-updated" class="text-[10px] text-slate-400"></span>
+                <span class="flex items-center gap-1.5"><span class="live-chip">서울시 실시간</span><span id="exit-updated" class="text-[10px] text-slate-400"></span></span>
               </div>
+              <div class="text-[10px] text-slate-400">‘차내 N명’ = 지금 그 버스에 타고 있는 승객 수예요.</div>
               <div id="exit-status" class="space-y-2"></div>
             </div>
 
@@ -503,7 +540,7 @@
 
               <!-- Trigger Inspect Box -->
               <div id="class-inspect-box" class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                <div class="font-bold text-slate-700 mb-0.5">💡 과목을 터치하여 통학 트리거 설정을 확인하세요</div>
+                <div class="font-bold text-slate-700 mb-0.5">💡 과목을 누르면 통학 계산에 어떻게 쓰이는지 보고, 시간·강의실을 고칠 수 있어요</div>
                 <div class="text-[11px] text-slate-500">시간표와 강의동 정보는 외부 서버에 전송되지 않고 스마트폰 기기 내부(Local)에만 저장됩니다.</div>
               </div>
             </div>
@@ -568,11 +605,12 @@
               <!-- 실시간 출발 현황 (서울시 버스·지하철 API) -->
               <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
                 <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100">
-                  <span class="text-xs font-extrabold text-slate-900">실시간 출발 현황</span>
+                  <span class="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">실시간 출발 현황 <span class="live-chip">서울시 실시간</span></span>
                   <button onclick="loadLiveBoard()" class="text-[11px] font-bold text-blue-600 hover:text-blue-500 tap-press">
                     <span id="live-board-updated">불러오는 중</span> · 새로고침
                   </button>
                 </div>
+                <div class="px-3.5 pt-2 text-[10px] text-slate-400">‘차내 N명’ = 지금 그 버스에 타고 있는 승객 수 · 만차·혼잡은 서울시가 주는 버스 혼잡도예요.</div>
                 <div id="live-board" class="divide-y divide-slate-100 text-xs"></div>
               </div>
 
@@ -645,8 +683,9 @@
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-slate-800">학우들의 실시간 현장 피드</span>
-                <span class="text-[10px] text-slate-400">회색 글은 예시 · 서버 공유 준비 중</span>
+                <span class="text-[10px] text-slate-400">서버 공유 준비 중</span>
               </div>
+              <div class="p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 font-bold">아래 흐린 글은 화면 예시예요. 실제 학우 제보가 아니고 추천에도 쓰이지 않아요.</div>
 
               <div id="report-feed-list" class="space-y-2">
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
@@ -879,6 +918,7 @@
           <input type="text" id="univ-search" oninput="filterUniversities()" placeholder="학교명 검색 (예: 서울대, 고려대, 국민대)" class="w-full pl-9 pr-3 py-2 bg-slate-100 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
+        <div class="mb-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">실시간 경로 안내는 <b>국민대만</b> 돼요. 다른 학교는 확장 구조를 보여주는 시연용 목록이에요.</div>
         <!-- University Scroll List -->
         <div id="univ-list-container" class="flex-1 overflow-y-auto space-y-1.5 py-1 text-xs pr-1"></div>
       </div>
@@ -1171,7 +1211,7 @@
       const level = a.full
         ? '<span class="px-1.5 py-0.5 rounded-full bg-rose-600 text-white font-bold text-[10px]">만차</span>'
         : a.congestion ? `<span class="px-1.5 py-0.5 rounded-full font-bold text-[10px] ${CONGESTION_STYLE[a.congestion]}">${a.congestion}</span>` : '';
-      const riders = a.passengers ? `<span class="text-slate-500">${a.passengers}명</span>` : '';
+      const riders = a.passengers ? `<span class="text-slate-500" title="지금 이 버스에 타고 있는 승객 수 (서울시 실시간)">차내 ${a.passengers}명</span>` : '';
       return `${riders} ${level}`;
     }
 
@@ -1385,12 +1425,12 @@
       const live = [];
       if (l.type === 'bus' && l.realtime) {
         live.push(`<b>지금 ${l.stopsAway ? `${l.stopsAway}정거장 전` : '접근 중'}</b>`);
-        if (l.passengers != null) live.push(`${l.passengers}명 탑승`);
+        if (l.passengers != null) live.push(`지금 버스 안 ${l.passengers}명`);
         if (l.congestion) live.push(l.congestion);
       }
       if (l.type === 'subway' && l.realtime && l.heading) live.push(`<b>${escapeHtml(l.heading)}</b>`);
       const next = l.nextVehicle
-        ? `<div class="text-[10px] text-slate-500">놓치면 다음 차 ${Math.round(l.nextVehicle.waitSec / 60)}분 뒤${l.nextVehicle.passengers != null ? ` · ${l.nextVehicle.passengers}명` : ''}${l.nextVehicle.congestion ? ` · ${l.nextVehicle.congestion}` : ''}</div>`
+        ? `<div class="text-[10px] text-slate-500">놓치면 다음 차 ${Math.round(l.nextVehicle.waitSec / 60)}분 뒤${l.nextVehicle.passengers != null ? ` · 버스 안 ${l.nextVehicle.passengers}명` : ''}${l.nextVehicle.congestion ? ` · ${l.nextVehicle.congestion}` : ''}</div>`
         : '';
       const stops = l.stops?.length > 2
         ? `<details class="mt-1 text-[10px] text-slate-500"><summary class="cursor-pointer">${l.stops.length - 1}개 ${l.type === 'bus' ? '정류장' : '역'} 이동</summary><div class="mt-1 leading-relaxed">${l.stops.map(escapeHtml).join(' › ')}</div></details>`
@@ -1623,6 +1663,7 @@
       const body = document.getElementById('brief-body');
       const eta = document.getElementById('brief-eta');
       document.getElementById('brief-basis').textContent = basis.label;
+      document.getElementById('brief-main').classList.add('hidden');
       if (!hasHome()) {
         title.textContent = '집을 먼저 등록해 주세요';
         body.innerHTML = `집 주소나 가까운 역을 등록하면 수업이 끝나는 시각에 맞춰 집 가는 경로를 알려드려요.<br>${REGISTER_HOME_BUTTON}`;
@@ -1640,25 +1681,44 @@
           return;
         }
         const first = top.legs.find((l) => l.type !== 'walk');
-        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천<br>${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
+        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천 · ${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
+        document.getElementById('brief-leave').textContent = hhmm(top.leaveAt);
+        document.getElementById('brief-board').innerHTML = `${hhmm(first.departAt)} ${escapeHtml(first.from)} 탑승<br>총 ${Math.round(top.totalSec / 60)}분`;
+        document.getElementById('brief-route').innerHTML = routeChips(top);
+        document.getElementById('brief-main').classList.remove('hidden');
 
+        // 왜 이 경로인지: 비교 → 위험 → 대기 근거 → 좌석 순
         const reasons = [];
+        const secondRide = second?.legs.find((l) => l.type !== 'walk');
+        if (second && secondRide) {
+          const gap = Math.round((Date.parse(second.arriveAt) - Date.parse(top.arriveAt)) / 60000);
+          reasons.push(gap > 0
+            ? `2순위(${rideName(secondRide)})보다 ${gap}분 빨리 도착해요.`
+            : `2순위(${rideName(secondRide)})와 도착은 비슷하지만 ${recMode === 'comfort' ? '더 편하게 갈 수 있어요' : '먼저 탈 수 있어요'}.`);
+        }
         const risky = data.routes.flatMap((r) => r.legs).find((l) => l.type === 'bus' && (l.full || l.missProb >= 0.4));
-        if (risky) reasons.push(`${risky.from} ${risky.route}번은 ${risky.full ? '만차' : `못 탈 확률 ${Math.round(risky.missProb * 100)}%`}예요.`);
-        reasons.push(`${hhmm(first.departAt)} ${first.from} 탑승 (대기 ${Math.round(first.waitSec / 60)}분${first.realtime ? '' : ', 추정'}${first.passengers ? `, 지금 ${first.passengers}명 탑승 중` : ''}${first.congestion ? `, ${first.congestion}` : ''}).`);
+        if (risky) reasons.push(`${risky.from} ${risky.route}번은 ${risky.full ? '만차예요' : `못 탈 확률이 ${Math.round(risky.missProb * 100)}%예요`}.`);
+        reasons.push(`대기 ${Math.round(first.waitSec / 60)}분${first.realtime ? '(실시간)' : first.timetable ? '(시간표)' : '(추정)'}${first.passengers != null ? ` · 지금 버스 안 ${first.passengers}명` : ''}${first.congestion ? ` · ${first.congestion}` : ''}.`);
         const rides = top.legs.filter((l) => l.type !== 'walk');
-        if (top.standingMin) reasons.push(`서서 가는 구간 약 ${top.standingMin}분.`);
+        if (top.standingMin) reasons.push(`서서 가는 구간이 약 ${top.standingMin}분 있어요.`);
         else if (rides.every((l) => l.seatLikely === true)) reasons.push('끝까지 앉아 갈 가능성이 높아요.');
-        if (second) reasons.push(`2순위는 ${rideName(second.legs.find((l) => l.type !== 'walk'))}, ${hhmm(second.arriveAt)} 도착.`);
-        body.textContent = reasons.join(' ');
+        body.innerHTML = `<ul class="list-disc pl-4 space-y-0.5">${reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`;
         eta.textContent = `${Math.round(top.totalSec / 60)}분 (${hhmm(top.arriveAt)})`;
         fillDemoNotice(data, top, first, basis);
         scheduleLiveRefresh(basis.at);
       } catch (e) {
         title.textContent = '경로를 불러오지 못했어요';
-        body.textContent = e.message;
+        body.innerHTML = `${escapeHtml(e.message)}<br><button onclick="sessionStorage.clear(); loadHomeBriefing()" class="mt-1.5 px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs font-bold tap-press">다시 시도</button>`;
         eta.textContent = '-';
       }
+    }
+
+    // 홈 카드용 경로 요약: 🚶 4분 › 🚌 7211 › 🚇 4호선
+    function routeChips(r) {
+      return r.legs.map((l) => l.type === 'walk'
+        ? `<span class="px-1.5 py-0.5 rounded-md bg-white/10 text-blue-100">🚶 ${l.minutes}분</span>`
+        : `<span class="px-1.5 py-0.5 rounded-md text-white" style="background:${legColor(l)}">${l.type === 'bus' ? '🚌' : '🚇'} ${escapeHtml(rideName(l))}</span>`)
+        .join('<span class="text-blue-300">›</span>');
     }
 
     // 데스크톱 데모의 잠금화면·푸시 배너를 실제 추천 결과로 채움
@@ -1857,7 +1917,7 @@
           </div>
           ${days.map(column).join('')}
         </div>
-        <div class="mt-1.5 text-[10px] text-slate-400 flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> 요일별 마지막 수업이 끝나는 시각에 하교 경로를 계산해요. 과목을 누르면 자세히 볼 수 있어요.</div>`;
+        <div class="mt-1.5 text-[10px] text-slate-400 flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> 요일별 마지막 수업이 끝나는 시각에 하교 경로를 계산해요. 과목을 누르면 자세히 보고 시간·강의실을 고칠 수 있어요.</div>`;
     }
 
     function addClass() {
@@ -2185,8 +2245,48 @@
         <div class="text-[11px] text-slate-600">
           강의실: <strong>${escapeHtml(c.room || '-')}</strong><br>${role}
         </div>
-        <button onclick="removeClass(${idx})" class="mt-2 text-[11px] font-bold text-rose-600 tap-press">이 수업 삭제</button>
+        <div class="mt-2 flex gap-3">
+          <button onclick="editClass(${idx})" class="text-[11px] font-bold text-blue-600 tap-press">시간·강의실 수정</button>
+          <button onclick="removeClass(${idx})" class="text-[11px] font-bold text-rose-600 tap-press">이 수업 삭제</button>
+        </div>
       `;
+    }
+
+    // 저장된 수업 고치기: 요일·시작·종료·과목·강의실
+    function editClass(idx) {
+      const c = timetable[idx];
+      const box = document.getElementById('class-inspect-box');
+      const field = 'px-2 py-1.5 rounded-lg border border-slate-200 bg-white';
+      box.innerHTML = `
+        <div class="font-bold text-slate-800 mb-2">수업 수정</div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="edit-day" class="col-span-2 ${field}">
+            ${[1, 2, 3, 4, 5, 6].map((d) => `<option value="${d}" ${d === c.day ? 'selected' : ''}>${DAY_NAMES[d]}요일</option>`).join('')}
+          </select>
+          <label class="text-[10px] text-slate-500">시작<input id="edit-start" type="time" value="${c.start}" class="mt-0.5 w-full ${field}"></label>
+          <label class="text-[10px] text-slate-500">종료<input id="edit-end" type="time" value="${c.end}" class="mt-0.5 w-full ${field}"></label>
+          <input id="edit-name" value="${escapeHtml(c.name)}" placeholder="과목명" class="col-span-2 ${field}">
+          <input id="edit-room" value="${escapeHtml(c.room || '')}" placeholder="강의실 (예: 미래관6층11호실)" class="col-span-2 ${field}">
+          <button onclick="inspectClassTrigger(${idx})" class="py-1.5 bg-slate-100 text-slate-600 rounded-lg font-bold tap-press">취소</button>
+          <button onclick="saveClassEdit(${idx})" class="py-1.5 bg-blue-600 text-white rounded-lg font-bold tap-press">저장</button>
+        </div>
+        <div class="mt-1.5 text-[10px] text-slate-400">강의실을 바꾸면 등교 경로가 그 건물 기준으로 다시 계산돼요.</div>`;
+    }
+
+    function saveClassEdit(idx) {
+      const v = (id) => document.getElementById(id).value.trim();
+      const c = { day: Number(v('edit-day')), start: v('edit-start'), end: v('edit-end'), name: v('edit-name'), room: v('edit-room') };
+      if (!c.name || !c.start || !c.end || c.end <= c.start) {
+        triggerToast('과목명과 시작·종료 시각을 확인해 주세요. 종료가 시작보다 늦어야 해요.');
+        return;
+      }
+      timetable[idx] = c;
+      saveTimetable();
+      renderTimetable();
+      try { sessionStorage.clear(); } catch {} // 바뀐 시간으로 다시 계산
+      loadHomeBriefing();
+      inspectClassTrigger(idx);
+      triggerToast(`${c.name} 수업을 수정했어요.`);
     }
 
     // Queue Report
@@ -2277,6 +2377,14 @@
       container.innerHTML = '';
       
       const filtered = UNIVERSITIES.filter(u => u.name.toLowerCase().includes(filter.toLowerCase()));
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="p-4 text-center text-slate-500 space-y-1">
+            <div class="font-bold text-slate-700">‘${escapeHtml(filter)}’에 맞는 학교가 없어요</div>
+            <div class="text-[11px]">학교 이름 일부만 넣어 보세요 (예: 국민, 서울). 지금 실시간 안내는 국민대만 돼요.</div>
+          </div>`;
+        return;
+      }
       filtered.forEach(u => {
         const isSelected = u.id === currentUniv.id;
         const div = document.createElement('div');
