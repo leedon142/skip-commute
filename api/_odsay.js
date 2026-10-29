@@ -32,18 +32,43 @@ function fileCache(file) {
 }
 
 // 유료(건당 25원) 키 보호용 하루 호출 상한. 넘으면 한도 초과와 똑같이 저장본·서울시 경로로 넘어감
-// ODSAY_DAILY_LIMIT로 조절, 기본은 배포 300회(최대 하루 7,500원) / 로컬 30회
-const DAILY_LIMIT = Number(process.env.ODSAY_DAILY_LIMIT) || (process.env.VERCEL ? 300 : 30);
+// ODSAY_DAILY_LIMIT로 조절, 기본은 배포 100회(최대 하루 2,500원) / 로컬 30회
+const DAILY_LIMIT = Number(process.env.ODSAY_DAILY_LIMIT) || (process.env.VERCEL ? 100 : 30);
 
 // 날짜별 호출 수 (KST). 동시 요청이 겹치면 몇 회 정도 오차가 날 수 있음
+const kstDay = (ms) => new Date(ms + 9 * 3600_000).toISOString().slice(0, 10);
+
+// 날짜별 호출 수는 평균을 보려고 90일 보관
+const COUNT_KEEP_DAYS = 90;
+
 async function countCall() {
-  const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
-  const key = `count:${day}`;
+  const key = `count:${kstDay(Date.now())}`;
   const used = Number(await cache.get(key).catch(() => 0)) || 0;
   if (used >= DAILY_LIMIT) {
     throw new HttpError(429, `오늘 길찾기 호출 상한(${DAILY_LIMIT}회)에 도달했어요. 저장된 경로나 서울시 경로로 대신 찾아요.`);
   }
-  await cache.set(key, used + 1, { ttl: 2 * 24 * 3600, name: 'count' }).catch(() => {});
+  await cache.set(key, used + 1, { ttl: COUNT_KEEP_DAYS * 24 * 3600, name: 'count' }).catch(() => {});
+}
+
+// 최근 n일 날짜별 호출 수 (오늘부터 거꾸로)
+export async function odsayUsage(days = 30) {
+  const n = Math.min(Math.max(1, days), COUNT_KEEP_DAYS);
+  const list = await Promise.all(Array.from({ length: n }, async (_, i) => {
+    const day = kstDay(Date.now() - i * 24 * 3600_000);
+    return { day, calls: Number(await cache.get(`count:${day}`).catch(() => 0)) || 0 };
+  }));
+  const used = list.filter((d) => d.calls > 0);
+  const total = list.reduce((a, d) => a + d.calls, 0);
+  return {
+    limit: DAILY_LIMIT,
+    today: list[0].calls,
+    total,
+    costWon: total * 25,
+    // 호출이 있었던 날 기준 평균 (상한 정할 때 참고)
+    avgPerActiveDay: used.length ? Math.round(total / used.length) : 0,
+    maxDay: used.reduce((m, d) => Math.max(m, d.calls), 0),
+    days: list,
+  };
 }
 
 async function odsay(path, params) {
