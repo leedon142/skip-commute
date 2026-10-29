@@ -777,6 +777,15 @@
             <!-- Settings Toggles -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3 text-xs">
               <div class="font-bold text-slate-800">스마트 알림 환경설정</div>
+              <div class="p-2.5 bg-blue-50 border border-blue-100 rounded-xl space-y-2">
+                <div class="font-bold text-blue-900">휴대폰 알림</div>
+                <div id="push-status" class="text-[11px] text-blue-800"></div>
+                <button id="push-enable" onclick="enablePush()" class="w-full py-1.5 bg-blue-600 text-white rounded-lg font-bold tap-press">알림 켜기</button>
+                <div id="push-controls" class="hidden flex gap-2">
+                  <button onclick="sendTestPush()" class="flex-1 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg font-bold tap-press">테스트 알림</button>
+                  <button onclick="disablePush()" class="flex-1 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold tap-press">알림 끄기</button>
+                </div>
+              </div>
               <div class="flex items-center justify-between">
                 <span>기상·교통 연동 스마트 가변 알람</span>
                 <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
@@ -941,13 +950,20 @@
       if (APP_MODE) {
         showSkipAppDirect();
         // ?tab=2 처럼 특정 탭으로 바로 열기 (홈 화면 바로가기용)
-        const tab = Number(new URLSearchParams(location.search).get('tab'));
-        switchTab(tab >= 1 && tab <= 5 ? tab : 1);
+        openFromUrl(location.href);
       } else {
         showLockScreen();
       }
       if (new URLSearchParams(location.search).has('me')) setTimeout(() => triggerToast('이 기기는 사용 통계에서 빠져요.'), 800);
-      if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // 앱이 열려 있을 때 알림을 누르면 서비스 워커가 이동할 화면을 알려줌
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if (e.data?.type === 'open') { showSkipAppDirect(); openFromUrl(e.data.url); }
+        });
+      }
+      renderPushStatus();
+      if (pushState().enabled) setTimeout(loadMorning, 1500); // 등교 알람 예약을 최신으로
     });
 
     // ================= ENHANCED DUAL-TRIGGER GESTURE ENGINE =================
@@ -1303,9 +1319,13 @@
       renderTripDest();
     }
 
+    function recQuery(params = {}) {
+      return new URLSearchParams({ ...homeParams(), mode: recMode, walkFactor: walkFactor().toFixed(2), ...params });
+    }
+
     async function fetchRecommend(params = {}) {
       if (!hasHome() && !params.homeLat) throw new Error('먼저 내 정보에서 집을 등록해 주세요.');
-      const qs = new URLSearchParams({ ...homeParams(), mode: recMode, walkFactor: walkFactor().toFixed(2), ...params });
+      const qs = recQuery(params);
       const key = `skip.rec:${qs}`;
       try {
         const hit = JSON.parse(sessionStorage.getItem(key) || 'null');
@@ -1316,6 +1336,145 @@
       if (!res.ok) throw new Error(data.error || res.statusText);
       try { sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data })); } catch {}
       return data;
+    }
+
+    // ---------------- 실제 휴대폰 알림 (웹 푸시) ----------------
+    // 알림 켜기 → 권한 요청 → 구독 → 테스트 알림. 그 뒤엔 하교·등교 화면이 계산될 때마다 서버에 예약
+    // (서버는 예약 시각에 같은 조건으로 실시간 재계산해서 보냄). 아이폰은 '홈 화면에 추가'한 앱에서만 돼요.
+    const PUSH_KEY = 'skip.push';
+    const PUSH_BEFORE_END_MIN = 5;
+    function pushState() {
+      try { return JSON.parse(localStorage.getItem(PUSH_KEY)) || { enabled: false, jobs: {} }; } catch { return { enabled: false, jobs: {} }; }
+    }
+    function savePushState(st) {
+      try { localStorage.setItem(PUSH_KEY, JSON.stringify(st)); } catch {}
+    }
+
+    function pushSupport() {
+      if (!window.isSecureContext) return 'https 주소(배포본)에서만 알림을 쓸 수 있어요.';
+      const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return /iPhone|iPad/.test(navigator.userAgent) && !standalone
+          ? '아이폰은 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 SKIP 앱에서 알림을 켜 주세요. (iOS 16.4 이상)'
+          : '이 브라우저는 웹 푸시를 지원하지 않아요.';
+      }
+      return null;
+    }
+
+    function base64ToBytes(b64) {
+      const s = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from(s, (c) => c.charCodeAt(0));
+    }
+
+    async function pushSubscription(create = false) {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub && create) {
+        const res = await fetch('/api/push');
+        const info = await res.json();
+        if (!res.ok) throw new Error(info.error || '알림 서버 설정이 없어요');
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64ToBytes(info.publicKey) });
+      }
+      return sub;
+    }
+
+    async function pushApi(body) {
+      const res = await fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    // 버튼에서 호출 (권한 요청은 사용자가 누른 순간에만 가능)
+    async function enablePush() {
+      const unsupported = pushSupport();
+      if (unsupported) return renderPushStatus(unsupported);
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') {
+          return renderPushStatus(perm === 'denied'
+            ? '알림이 차단돼 있어요. 브라우저(또는 휴대폰 설정)의 사이트 권한에서 알림을 허용해 주세요.'
+            : '알림 권한을 허용해야 보낼 수 있어요.');
+        }
+        renderPushStatus('알림 등록 중…');
+        const sub = await pushSubscription(true);
+        savePushState({ ...pushState(), enabled: true });
+        await pushApi({ action: 'test', subscription: sub.toJSON() });
+        track('알림-켜기');
+        renderPushStatus('테스트 알림을 보냈어요. 알림을 눌러 하교 화면으로 이동하는지 확인해 보세요.');
+        loadHomeBriefing();
+        loadMorning();
+      } catch (e) {
+        renderPushStatus(`알림 켜기 실패: ${e.message}`);
+      }
+    }
+
+    async function sendTestPush() {
+      try {
+        const sub = await pushSubscription();
+        if (!sub) return enablePush();
+        await pushApi({ action: 'test', subscription: sub.toJSON() });
+        renderPushStatus('테스트 알림을 보냈어요.');
+      } catch (e) {
+        renderPushStatus(`테스트 실패: ${e.message}`);
+      }
+    }
+
+    async function disablePush() {
+      const st = pushState();
+      await Promise.all(Object.values(st.jobs || {}).map((j) => pushApi({ action: 'cancel', messageId: j.id }).catch(() => {})));
+      try { await (await pushSubscription())?.unsubscribe(); } catch {}
+      savePushState({ enabled: false, jobs: {} });
+      renderPushStatus('알림을 껐어요.');
+    }
+
+    // kind별로 하나만 예약. 시각이 1분 넘게 바뀌면 예전 예약을 취소하고 다시
+    async function schedulePush(kind, at, params, plannedLeaveBy) {
+      const st = pushState();
+      if (!st.enabled || !at || at < Date.now() + 60_000) return;
+      const prev = st.jobs?.[kind];
+      if (prev && Math.abs(prev.at - at) < 60_000 && prev.at > Date.now()) return;
+      try {
+        const sub = await pushSubscription();
+        if (!sub) return;
+        // 예약에는 GPS 위치를 넣지 않음 (발송 시각엔 정문 기준으로 계산)
+        const query = recQuery(params);
+        query.delete('lat'); query.delete('lng');
+        const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, cancel: prev?.id });
+        savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId } } });
+        renderPushStatus();
+      } catch (e) {
+        renderPushStatus(`알림 예약 실패: ${e.message}`);
+      }
+    }
+
+    function renderPushStatus(msg) {
+      const box = document.getElementById('push-status');
+      if (!box) return;
+      const st = pushState();
+      const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+      const on = st.enabled && perm === 'granted';
+      document.getElementById('push-enable').classList.toggle('hidden', on);
+      document.getElementById('push-controls').classList.toggle('hidden', !on);
+      const jobs = Object.entries(st.jobs || {}).filter(([, j]) => j.at > Date.now())
+        .map(([k, j]) => `${k === 'morning' ? '등교 알람' : '하교 브리핑'} ${new Date(j.at).toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`);
+      box.textContent = msg ?? (on
+        ? (jobs.length ? `예약됨: ${jobs.join(', ')}` : '알림 켜짐 · 시간표에 수업이 있으면 자동으로 예약돼요.')
+        : pushSupport() ?? '켜면 수업 끝나기 5분 전 하교 경로, 등교 알람 시각에 출발 안내를 보내요.');
+    }
+
+    // ?tab=3&mode=dismissal 같은 주소로 해당 화면 열기 (알림 클릭, 홈 화면 바로가기)
+    function openFromUrl(href) {
+      const q = new URL(href, location.href).searchParams;
+      const tab = Number(q.get('tab'));
+      switchTab(tab >= 1 && tab <= 5 ? tab : 1);
+      const mode = q.get('mode');
+      if (tab === 3 && (mode === 'dismissal' || mode === 'morning')) switchCommuteSubMode(mode);
+      if (q.get('from') === 'push') {
+        track('알림-클릭');
+        try { sessionStorage.clear(); } catch {} // 알림을 누른 시점 기준으로 다시 계산
+        if (mode === 'dismissal') runRecommend(true);
+      }
     }
 
     // ---------------- 경로 상세 (카드를 누르면 펼침) ----------------
@@ -1629,6 +1788,7 @@
         eta.textContent = '-';
         return;
       }
+      if (basis.at) schedulePush('dismissal', basis.at - PUSH_BEFORE_END_MIN * 60000, { at: basis.at });
       try {
         const data = await fetchRecommend(basis.at ? { at: basis.at } : {});
         const [top, second] = data.routes;
@@ -2032,6 +2192,7 @@
         if (!top) throw new Error('경로를 찾지 못했어요');
         const leaveBy = new Date(top.leaveBy);
         const alarmAt = new Date(leaveBy.getTime() - prep * 60000);
+        schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime());
         alarm.innerHTML = `${dayLabel} <span class="text-cyan-300">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
         const live = top.legs.some((l) => l.realtime);
         reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`

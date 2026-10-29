@@ -9,6 +9,7 @@
     "dev": "node server.js"
   },
   "dependencies": {
-    "@vercel/functions": "^3.10.4"
+    "@vercel/functions": "^3.10.4",
+    "web-push": "^3.6.7"
   }
 }

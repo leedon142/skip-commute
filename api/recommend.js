@@ -11,8 +11,10 @@
 import { handle, HttpError } from './_lib.js';
 import { recommend, MAIN_GATE } from './_engine.js';
 
-export const GET = handle(async (url) => {
-  const q = url.searchParams;
+export const GET = handle(async (url) => recommendFromQuery(url.searchParams));
+
+// 쿼리 → 추천. 예약 알림(/api/push-send)도 발송 시각에 같은 조건으로 다시 계산할 때 사용
+export function recommendFromQuery(q) {
   const homeLat = Number(q.get('homeLat'));
   const homeLng = Number(q.get('homeLng'));
   const home = homeLat && homeLng
@@ -32,4 +34,4 @@ export const GET = handle(async (url) => {
     room: (q.get('room') || '').slice(0, 40) || undefined,
     walkFactor: Math.min(2, Math.max(0.5, Number(q.get('walkFactor')) || 1)),
   });
-});
+}
