@@ -133,6 +133,13 @@
     .cm-go { background: var(--cm-green); color: #fff; border-radius: 9999px; font-weight: 900; }
     .cm-go:hover { background: var(--cm-green-d); }
     .cm-live { color: #e8a000; font-size: 11px; transform: rotate(45deg); display: inline-block; }
+    /* 제보 버튼: 누른 것만 색 (여유 초록 · 보통 노랑 · 혼잡 빨강) */
+    .report-opt.is-on[data-level="ok"] { background: #e8f6ec; border-color: #2fa84f; }
+    .report-opt.is-on[data-level="mid"] { background: #fff6dc; border-color: #e8a000; }
+    .report-opt.is-on[data-level="busy"] { background: #fdeaea; border-color: #e0484f; }
+    .report-opt.is-on[data-level="ok"] i, .report-opt.is-on[data-level="ok"] span { color: #1f7a3a; }
+    .report-opt.is-on[data-level="mid"] i, .report-opt.is-on[data-level="mid"] span { color: #9a6a00; }
+    .report-opt.is-on[data-level="busy"] i, .report-opt.is-on[data-level="busy"] span { color: #b8262d; }
     .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
     /* 짙은 패널 위 안내·오류·출처 글씨 */
     #rec-results > .p-3 { background: #fff; border-radius: 12px; }
@@ -679,17 +686,17 @@
                 <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
               </div>
               <div class="grid grid-cols-3 gap-2">
-                <button onclick="submitReport('여유 (바로 탑승 가능)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                <button onclick="selectReport(this); submitReport('여유 (바로 탑승 가능)')" data-level="ok" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-user text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">여유</span>
                   <span class="text-[10px] text-slate-500">바로 타요</span>
                 </button>
-                <button onclick="submitReport('보통 (1대 대기 후 탑승)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                <button onclick="selectReport(this); submitReport('보통 (1대 대기 후 탑승)')" data-level="mid" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-users text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">보통</span>
                   <span class="text-[10px] text-slate-500">한 대 보내요</span>
                 </button>
-                <button onclick="submitReport('혼잡 (만차 / 줄 매우 긺)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                <button onclick="selectReport(this); submitReport('혼잡 (만차 / 줄 매우 긺)')" data-level="busy" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-users-three text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">혼잡</span>
                   <span class="text-[10px] text-slate-500">줄이 길어요</span>
@@ -2501,6 +2508,10 @@
       }
       label.textContent = reportStop ? `${reportStop.name} (${reportStop.ars}) · ${reportStop.distM}m` : '300m 안에 정류장이 없어요';
       return reportStop;
+    }
+
+    function selectReport(btn) {
+      document.querySelectorAll('.report-opt').forEach((b) => b.classList.toggle('is-on', b === btn));
     }
 
     async function submitReport(statusText) {
