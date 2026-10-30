@@ -57,15 +57,19 @@ function horizontalLines(img, x0, x1, y0, y1) {
   const lum = new Float32Array(img.height);
   const xs = Math.max(0, Math.round(x0)), xe = Math.min(img.width, Math.round(x1));
   for (let y = Math.max(0, y0); y < Math.min(img.height, y1); y++) {
-    let dark = 0;
+    let dark = 0, open = 0;
     for (let x = xs; x < xe; x++) {
       const p = (y * img.width + x) * 4;
+      // 칸 안이나 칸 경계(위·아래가 색칠된 곳)는 빼고 빈 칸에서만 셈
+      const sat = (q) => q < 0 || q >= img.data.length ? 0 : Math.max(img.data[q], img.data[q + 1], img.data[q + 2]) - Math.min(img.data[q], img.data[q + 1], img.data[q + 2]);
+      if (sat(p) > 22 || sat(p - img.width * 12) > 22 || sat(p + img.width * 12) > 22) continue;
+      open++;
       const l = (img.data[p] + img.data[p + 1] + img.data[p + 2]) / 3;
       const up = y > 2 ? (img.data[p - img.width * 8] + img.data[p - img.width * 8 + 1] + img.data[p - img.width * 8 + 2]) / 3 : l;
       const dn = y < img.height - 3 ? (img.data[p + img.width * 8] + img.data[p + img.width * 8 + 1] + img.data[p + img.width * 8 + 2]) / 3 : l;
       if (l < up - 4 && l < dn - 4) dark++;
     }
-    lum[y] = dark / Math.max(1, xe - xs);
+    lum[y] = open > (xe - xs) * 0.1 ? dark / open : 0;
   }
   const lines = [];
   for (let y = 1; y < img.height - 1; y++) {
@@ -95,7 +99,7 @@ function hourScale(img, grid, hours) {
 // 색칠된 수업 칸: 회색·흰색이 아닌(채도 있는) 픽셀 덩어리.
 // 위아래로 붙은 다른 수업은 색이 달라서 색이 비슷한 이웃끼리만 이어 붙임
 function colorBlocks(img, x0, x1, y0, y1, minW, minH) {
-  const S = 2;
+  const S = 1;
   const W = Math.ceil(img.width / S), H = Math.ceil(img.height / S);
   const col = new Int16Array(W * H * 3).fill(-1);
   for (let gy = Math.max(0, Math.floor(y0 / S)); gy < Math.min(H, Math.ceil(y1 / S)); gy++) {
@@ -108,11 +112,18 @@ function colorBlocks(img, x0, x1, y0, y1, minW, minH) {
         const R = img.data[p], G = img.data[p + 1], B = img.data[p + 2];
         if (Math.max(R, G, B) - Math.min(R, G, B) > 22) { n++; r += R; g += G; b += B; }
       }
-      if (n >= 3) col.set([r / n, g / n, b / n], (gy * W + gx) * 3);
+      if (n === S * S) col.set([r / n, g / n, b / n], (gy * W + gx) * 3);
     }
   }
-  const on = (i) => col[i * 3] >= 0;
-  const near = (i, j) => Math.abs(col[i * 3] - col[j * 3]) + Math.abs(col[i * 3 + 1] - col[j * 3 + 1]) + Math.abs(col[i * 3 + 2] - col[j * 3 + 2]) < 60;
+  const diff = (i, j) => Math.abs(col[i * 3] - col[j * 3]) + Math.abs(col[i * 3 + 1] - col[j * 3 + 1]) + Math.abs(col[i * 3 + 2] - col[j * 3 + 2]);
+  // 경계의 섞인 색(사진 압축 번짐)은 빼고 주변과 같은 색인 픽셀만 씀 → 칸 사이에 생긴 다리가 끊김
+  const core = new Uint8Array(W * H);
+  for (let i = W + 1; i < W * H - W - 1; i++) {
+    if (col[i * 3] < 0) continue;
+    core[i] = [i - 1, i + 1, i - W, i + W].every((k) => col[k * 3] >= 0 && diff(i, k) < 24) ? 1 : 0;
+  }
+  const on = (i) => core[i] === 1;
+  const near = (i, j) => diff(i, j) < 45;
   const seen = new Uint8Array(W * H);
   let rects = [];
   for (let i = 0; i < W * H; i++) {
@@ -187,7 +198,8 @@ export function parseTimetable(img, items) {
       end: hhmm(toHour(r.y + r.h)),
       // 줄바꿈된 과목명: 한글은 붙이고 영어 단어 사이는 띄움
       name: nameLines.map((t) => t.text).reduce((a, t) => a + (/[A-Za-z0-9]$/.test(a) && /^[A-Za-z]/.test(t) ? ' ' : '') + t, '').replace(TRUNC_RE, ''),
-      room: roomAt > 0 ? texts[roomAt].text.replace(TRUNC_RE, '') : '',
+      // 강의실도 칸이 좁으면 '미래관2층31호' + '실'처럼 줄이 나뉨
+      room: roomAt > 0 ? texts.slice(roomAt).map((t) => t.text).join('').replace(TRUNC_RE, '') : '',
     });
   }
   return classes.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
