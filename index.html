@@ -2779,9 +2779,10 @@
     // 지하철은 지하라 GPS가 잘 안 잡혀서 예상 도착 시각으로도 넘어감 (버스도 GPS가 1분 넘게 안 오면 시각 기준)
     const NAV_KEY = 'skip.nav';
     const NAV_GPS_STALE_MS = 60000;
-    // 지하철은 예상보다 일찍 도착하는 경우가 있어 넉넉히 먼저 안내 (내릴 준비 3분 전, 내리세요 1분 전)
-    const SUBWAY_PREP_MS = 180e3;
-    const SUBWAY_ALIGHT_MS = 60e3;
+    // 지하철은 예상보다 조금 일찍 도착할 수 있어 살짝 먼저 안내 (내릴 준비 1분 30초 전, 내리세요 20초 전)
+    // 3분 전으로 했더니 한 정거장 일찍 안내가 나와서 줄임 (한 구간이 약 2분)
+    const SUBWAY_PREP_MS = 90e3;
+    const SUBWAY_ALIGHT_MS = 20e3;
     let navWatchId = null;
     let navTimer = null;
     let navWakeLock = null;

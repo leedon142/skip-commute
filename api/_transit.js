@@ -99,6 +99,16 @@ export async function busStopsNear(lat, lng, radius) {
   }));
 }
 
+// barvlDt는 서울시가 값을 받은 시각(recptnDt) 기준 남은 초라서, 받아온 시각까지 흐른 만큼 빼야 지금 기준이 됨
+// 이미 도착했을 시간이면 오래된 값이라 쓰지 않음 (recptnDt 형식 'YYYY-MM-DD HH:mm:ss', 한국 시각)
+function liveSeconds(barvlDt, recptnDt, fetchedAtMs) {
+  const sec = Number(barvlDt);
+  if (!(sec > 0)) return null;
+  const recvAt = Date.parse(`${String(recptnDt ?? '').replace(' ', 'T')}+09:00`);
+  const age = Number.isFinite(recvAt) ? Math.max(0, (fetchedAtMs - recvAt) / 1000) : 0;
+  return sec - age > 0 ? Math.round(sec - age) : null;
+}
+
 export async function subwayStation(name) {
   const key = requireEnv('SEOUL_SUBWAY_KEY');
   const { data, at } = await fetchJsonAt(
@@ -116,7 +126,7 @@ export async function subwayStation(name) {
       heading: t.trainLineNm,
       // 열차 번호: 길안내에서 탄 열차가 내릴 역에 언제 오는지 추적
       trainNo: t.btrainNo || null,
-      seconds: Number(t.barvlDt) > 0 ? Number(t.barvlDt) : null,
+      seconds: liveSeconds(t.barvlDt, t.recptnDt, at),
       message: t.arvlMsg2,
       position: t.arvlMsg3,
       express: t.btrainSttus === '급행',
