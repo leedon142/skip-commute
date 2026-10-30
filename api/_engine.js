@@ -5,6 +5,7 @@ import { findStation, searchPaths } from './_odsay.js';
 import { walkRoute } from './_walk.js';
 import { weatherAt } from './_weather.js';
 import { kakao } from './_kakao.js';
+import { listReports, summarize, REPORT_APPLY_SEC } from './_reports.js';
 import profile from '../data/boarding_profile.json' with { type: 'json' };
 import subwayStats from '../data/subway_congestion.json' with { type: 'json' };
 
@@ -211,6 +212,16 @@ async function busLeg(sp, atSec, now, arsOverride, ctx = {}) {
   if (leg.passengers != null && boardersPerBus != null && leg.passengers + boardersPerBus > BUS_CAPACITY) {
     miss = Math.max(miss, 0.5);
     leg.notes.push(`평소 이 시간 한 대당 ${boardersPerBus}명 탑승 · 만차 위험`);
+  }
+  // 학우 줄 제보: 곧 탈 버스(20분 안)에만, 버스 혼잡도와 같은 기준(보통 10%·혼잡 40%)으로 못 탈 확률 하한
+  const report = ars && ctx.reports && atSec + leg.waitSec <= REPORT_APPLY_SEC ? summarize(ctx.reports, ars, now) : null;
+  if (report) {
+    leg.report = report;
+    const floor = MISS_PROB[report.label] ?? 0;
+    if (floor > miss) {
+      miss = floor;
+      leg.notes.push(`학우 제보 '${report.label}' ${report.count}건 (${report.agoMin}분 전) · 못 탈 확률 ${Math.round(floor * 100)}% 반영`);
+    }
   }
   leg.missProb = miss;
   leg.extraWaitSec = Math.round(miss * headwaySec);
@@ -471,7 +482,9 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     ? { sec: INDOOR_SEC, building: building.name, basis: `${building.name}까지 걷는 시간은 경로에 포함 · 건물 안 ${INDOOR_SEC / 60}분` }
     : { sec: CLASS_BUFFER_SEC, basis: room ? `'${room}'에서 건물을 못 찾아 정문 + 10분` : '강의실 정보 없음 · 정문 + 10분' };
   const weather = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
-  const ctx = { weather };
+  // 정류장 줄 제보 (실패해도 추천은 계속)
+  const reports = await listReports(now).catch(() => []);
+  const ctx = { weather, reports };
   const walkMul = walkFactor * (WEATHER_WALK[weather?.precip] ?? 1);
 
   // 캠퍼스 안에서 출발하면 경로는 정문·후문 기준점에서 받아 재사용하고 (ODsay 호출 절약),
@@ -616,6 +629,7 @@ function dataSources(routes, pathSources, weather) {
   if (legs.some((l) => l.stationCongestion?.length)) out.push({ what: '지하철 혼잡도', by: '서울교통공사 30분 단위 통계', at: null, note: '평소 기준' });
   if (legs.some((l) => l.typicalBoarders != null)) out.push({ what: '버스 탑승 인원', by: `서울시 교통카드 승하차 통계 (${profile.month.slice(0, 4)}.${profile.month.slice(4)})`, at: null, note: '평일 평균' });
   if (legs.some((l) => l.type === 'walk')) out.push({ what: '도보', by: 'OpenStreetMap 보행 경로', at: null, note: '내 걸음 속도 배율 반영' });
+  if (legs.some((l) => l.report)) out.push({ what: '정류장 줄', by: '학우 제보', at: null, note: '15분 안 제보만 · 보통 10%·혼잡 40%를 못 탈 확률 하한으로' });
   if (weather) out.push({ what: '날씨', by: '기상청 초단기예보', at: null, note: `${weather.at} · ${weather.forTime} 예보` });
   return out;
 }

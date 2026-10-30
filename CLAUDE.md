@@ -11,7 +11,9 @@
 - `index.html` — 프런트 전체 (정적 파일 하나)
 - `api/*.js` — Vercel 함수 (웹 표준 `GET` 핸들러). `_`로 시작하는 파일은 공용 모듈
   - 시간표 사진 인식은 서버 없이 브라우저에서: `ocr/` (PaddleOCR ONNX, 모델은 `models/ocr/`). 사진을 외부로 보내지 않는다
-  - `_engine.js` 추천 엔진 · `_odsay.js` 경로 검색 · `_pathinfo.js` 서울시 환승경로(대체) · `_transit.js` 버스·지하철 실시간 · `_weather.js` 기상청 · `_kakao.js` 장소 검색 · `_walk.js` 도보(OSM)
+  - `_engine.js` 추천 엔진 · `_odsay.js` 경로 검색 · `_pathinfo.js` 서울시 환승경로(대체) · `_transit.js` 버스·지하철 실시간 · `_weather.js` 기상청 · `_kakao.js` 장소 검색 · `_walk.js` 도보(OSM) · `_reports.js` 정류장 줄 제보(공유, 추천 반영) · `_shuttle.js` 셔틀 시간표(`data/shuttle.json`)·탑승 기록 · `_store.js` 공유 저장소(배포 Runtime Cache / 로컬 `data/.*.json`) · `_push.js` 웹 푸시·QStash 예약
+- 외부 CDN 없음: 스타일·아이콘·글꼴·onnxruntime은 `vendor/`. **index.html에 새 Tailwind 클래스를 쓰면 `npm run css`로 `vendor/tailwind.css`를 다시 만든다** (JS에서 이어 붙이는 색 클래스는 `tailwind.config.cjs` safelist)
+- 시간표는 기기 안에 AES-GCM 암호화 저장 (`skip.timetable.enc`, 키는 IndexedDB `skip-vault`). 직접 localStorage에 평문으로 쓰지 말고 `saveTimetable()`을 거친다
 - 로컬 실행: `npm run dev` (= `node server.js`). 테스트용으로 따로 띄우면 `PORT=3079 node server.js`, 끝나면 꼭 종료
 
 ## ⚠ ODsay 호출 = 돈 (반드시 지킬 것)
