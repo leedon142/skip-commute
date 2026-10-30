@@ -512,11 +512,12 @@
                 수업 종료 시점 및 강의동 위치를 기준으로 하교 알림이 자동 동기화됩니다.
               </p>
 
-              <!-- 시간표 사진으로 등록 (Gemini) -->
+              <!-- 시간표 사진으로 등록 (기기 안 OCR, 사진은 밖으로 안 나감) -->
               <label class="mb-3 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 text-blue-700 text-xs font-bold cursor-pointer tap-press">
                 <i class="ph-bold ph-camera"></i> <span id="tt-photo-label">시간표 사진으로 등록</span>
                 <input id="tt-photo" type="file" accept="image/*" class="hidden" onchange="importTimetablePhoto(this)">
               </label>
+              <div class="-mt-2 mb-3 text-[10px] text-slate-400 text-center">사진은 이 기기 안에서만 읽고 어디에도 보내지 않아요</div>
               <div id="tt-import" class="hidden mb-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs"></div>
 
               <!-- Classes List (localStorage 'skip.timetable') -->
@@ -2096,26 +2097,8 @@
       triggerToast(`${c.name} 수업을 추가했어요.`);
     }
 
-    // ---------------- 시간표 사진 → 수업 목록 (/api/timetable-image, 사진은 서버에 저장 안 함) ----------------
+    // ---------------- 시간표 사진 → 수업 목록 (ocr/browser.js: 기기 안 PaddleOCR, 사진은 외부로 안 보냄) ----------------
     let importedClasses = [];
-
-    // 휴대폰 사진은 수 MB라서 긴 변 1600px JPEG로 줄여서 보냄
-    function shrinkImage(file) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          URL.revokeObjectURL(img.src);
-          resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
-        };
-        img.onerror = () => reject(new Error('사진을 열 수 없어요'));
-        img.src = URL.createObjectURL(file);
-      });
-    }
 
     async function importTimetablePhoto(input) {
       const file = input.files[0];
@@ -2123,21 +2106,15 @@
       if (!file) return;
       const label = document.getElementById('tt-photo-label');
       const box = document.getElementById('tt-import');
-      label.textContent = '사진 읽는 중… (10~30초, 다른 탭 써도 돼요)';
+      label.textContent = '사진 읽는 중…';
       box.classList.add('hidden');
       try {
-        const image = await shrinkImage(file);
-        const res = await fetch('/api/timetable-image', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ image, mimeType: 'image/jpeg' }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const { readTimetable } = await import('/ocr/browser.js');
+        const classes = await readTimetable(file, (msg) => { label.textContent = msg; });
         track('시간표사진-인식');
-        importedClasses = data.classes.sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+        importedClasses = classes;
         renderImportPreview();
-        triggerToast(`시간표에서 ${importedClasses.length}개 수업을 읽었어요. 시간표 탭에서 확인해 주세요`);
+        triggerToast(`시간표에서 ${importedClasses.length}개 수업을 읽었어요. 시간이 맞는지 확인해 주세요`);
       } catch (e) {
         triggerToast(e.message || '사진을 읽지 못했어요');
       } finally {
