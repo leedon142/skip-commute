@@ -117,6 +117,27 @@
       border-radius: 100px;
       transition: width 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
     }
+    /* ---- 실험: 이동 앱 스타일 (ui/citymapper-style 브랜치) ---- */
+    :root { --cm-panel: #3c5a78; --cm-panel-2: #33506c; --cm-green: #2fa84f; --cm-green-d: #23883e; --cm-blue: #2f80c9; }
+    .cm-panel { background: var(--cm-panel); }
+    .cm-field { background: var(--cm-panel-2); border-radius: 12px; }
+    .cm-chip { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #dbe6f1; font-size: 10px; font-weight: 700; }
+    .cm-chip .cm-dot { width: 40px; height: 40px; border-radius: 9999px; display: grid; place-items: center; background: var(--cm-panel-2); font-size: 18px; color: #fff; }
+    .cm-chip.cm-active .cm-dot { background: #fff; color: var(--cm-panel); }
+    .cm-chip.cm-active { color: #fff; }
+    .cm-dest { padding: 3px 9px; border-radius: 9999px; font-weight: 800; background: var(--cm-panel-2); color: #dbe6f1; }
+    .cm-dest.cm-active { background: #fff; color: var(--cm-panel); }
+    .cm-card { background: #fff; border-radius: 12px; }
+    .cm-min { font-size: 26px; line-height: 1; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
+    .cm-arrive { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #e3eefa; color: var(--cm-blue); font-size: 10px; font-weight: 800; }
+    .cm-go { background: var(--cm-green); color: #fff; border-radius: 9999px; font-weight: 900; }
+    .cm-go:hover { background: var(--cm-green-d); }
+    .cm-live { color: #e8a000; font-size: 11px; transform: rotate(45deg); display: inline-block; }
+    .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
+    /* 짙은 패널 위 안내·오류·출처 글씨 */
+    #rec-results > .p-3 { background: #fff; border-radius: 12px; }
+    #rec-results > details, #rec-results > .px-3\.5 { color: #dbe6f1; }
+    #rec-results > details b { color: #fff; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-start p-3 sm:p-6 overflow-x-hidden">
@@ -563,43 +584,54 @@
             <div id="submode-dismissal" class="space-y-3">
 
               <!-- 지금 하교 → 실시간 경로 추천 (/api/recommend) -->
-              <div class="bg-white rounded-2xl border-2 border-blue-600 shadow-md overflow-hidden">
-                <div class="px-3.5 pt-3 pb-2.5 space-y-2">
+              <div class="cm-panel rounded-2xl shadow-md overflow-hidden text-white">
+                <div class="px-3 pt-3 pb-2 space-y-2.5">
                   <div class="flex items-center justify-between">
-                    <span id="rec-title" class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
-                    <div class="flex items-center gap-1">
-                      <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-slate-400 hover:text-blue-600 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
-                      <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
-                        <button id="rec-mode-fast" onclick="setRecMode('fast')" class="px-2 py-0.5 rounded-md bg-white text-blue-700 shadow-sm">빠른 순</button>
-                        <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="px-2 py-0.5 rounded-md text-slate-500">편한 순</button>
+                    <span id="rec-title" class="text-sm font-extrabold">지금 하교하면?</span>
+                    <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-blue-100 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
+                  </div>
+                  <!-- 출발 · 도착 -->
+                  <div class="cm-field text-xs divide-y divide-white/10">
+                    <div class="flex items-center gap-2 px-2.5 py-2">
+                      <span class="w-8 text-[10px] text-blue-100 font-bold">출발</span>
+                      <span class="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-white/70"></span>
+                      <span class="font-bold">현재 위치</span>
+                      <span class="text-[10px] text-blue-100">· 캠퍼스면 정문·후문 기준</span>
+                    </div>
+                    <div class="px-2.5 py-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-8 text-[10px] text-blue-100 font-bold">도착</span>
+                        <i class="ph-fill ph-map-pin text-rose-300"></i>
+                        <div class="flex gap-1.5 min-w-0">
+                          <button id="trip-home" onclick="clearTripDest()" class="cm-dest cm-active truncate tap-press">🏠 <span id="trip-home-name"></span></button>
+                          <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="cm-dest truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
+                        </div>
+                      </div>
+                      <div id="trip-search" class="hidden mt-2 space-y-1.5">
+                        <div class="flex gap-1.5">
+                          <input id="trip-q" placeholder="가려는 곳 주소, 가게, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-slate-900">
+                          <button onclick="searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="px-3 rounded-lg bg-white text-slate-800 font-bold tap-press">검색</button>
+                        </div>
+                        <div id="trip-results" class="space-y-1 text-slate-800"></div>
                       </div>
                     </div>
                   </div>
-                  <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
-                    <div><b class="text-slate-800">빠른 순</b> · 예상 도착 시각이 이른 순서. 예상 소요 = 도보(내 걸음 속도·비 오면 더 길게) + 대기(실시간 → 지하철 시간표 → 배차간격 절반 순으로 사용) + 만차로 못 탈 확률 × 배차간격 + 탑승 시간.</div>
-                    <div><b class="text-slate-800">편한 순</b> · 예상 소요에 벌점을 더한 순서. 서서 가는 1분 +0.5분, 앉을 수 있을지 모르는 1분 +0.25분, 환승 1회 +2분. 그래서 몇 분 더 걸려도 앉아 가고 환승이 적은 경로가 위로 올라와요.</div>
+                  <!-- 정렬 방식 -->
+                  <div class="flex items-start gap-4 px-1">
+                    <button id="rec-mode-fast" onclick="setRecMode('fast')" class="cm-chip cm-active tap-press"><span class="cm-dot"><i class="ph-bold ph-lightning"></i></span>빠른 순</button>
+                    <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="cm-chip tap-press"><span class="cm-dot"><i class="ph-bold ph-armchair"></i></span>편한 순</button>
+                    <button onclick="runRecommend(false, false, true)" class="ml-auto self-center px-4 py-2 cm-go text-xs tap-press flex items-center gap-1">
+                      <i class="ph-bold ph-magnifying-glass"></i> 경로 찾기
+                    </button>
+                  </div>
+                  <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-white/10 text-[11px] text-blue-50 leading-relaxed space-y-1">
+                    <div><b class="text-white">빠른 순</b> · 예상 도착 시각이 이른 순서. 예상 소요 = 도보(내 걸음 속도·비 오면 더 길게) + 대기(실시간 → 지하철 시간표 → 배차간격 절반 순으로 사용) + 만차로 못 탈 확률 × 배차간격 + 탑승 시간.</div>
+                    <div><b class="text-white">편한 순</b> · 예상 소요에 벌점을 더한 순서. 서서 가는 1분 +0.5분, 앉을 수 있을지 모르는 1분 +0.25분, 환승 1회 +2분. 그래서 몇 분 더 걸려도 앉아 가고 환승이 적은 경로가 위로 올라와요.</div>
                     <div>운행이 끝난 노선이 낀 경로는 순서와 상관없이 맨 아래에 회색으로 보여줘요.</div>
                   </div>
-                  <div class="text-xs">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-slate-500 shrink-0">도착지</span>
-                      <button id="trip-home" onclick="clearTripDest()" class="px-2 py-1 rounded-lg font-bold bg-blue-600 text-white truncate tap-press">🏠 <span id="trip-home-name"></span></button>
-                      <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="px-2 py-1 rounded-lg font-bold bg-slate-100 text-slate-600 truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
-                    </div>
-                    <div id="trip-search" class="hidden mt-2 space-y-1.5">
-                      <div class="flex gap-1.5">
-                        <input id="trip-q" placeholder="가려는 곳 주소, 가게, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
-                        <button onclick="searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
-                      </div>
-                      <div id="trip-results" class="space-y-1"></div>
-                    </div>
-                  </div>
-                  <button onclick="runRecommend(false, false, true)" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
-                    내 위치로 최적 경로 찾기
-                  </button>
-                  <div id="rec-meta" class="text-[10px] text-slate-500"></div>
+                  <div id="rec-meta" class="text-[10px] text-blue-100"></div>
                 </div>
-                <div id="rec-results" class="divide-y divide-slate-100 text-xs"></div>
+                <div id="rec-results" class="px-2 pb-2 space-y-1.5 text-xs"></div>
               </div>
 
               <!-- 실시간 출발 현황 (서울시 버스·지하철 API) -->
@@ -844,18 +876,18 @@
 
         <!-- 걷는 중: 정류장에 도착하면 '도착'을 눌러 내 걸음 속도 측정 -->
         <!-- 실시간 길안내: 지금 할 일, 남은 거리, 음성 켜기/끄기 -->
-        <div id="nav-bar" class="hidden bg-blue-700 text-white px-3.5 py-2.5 shrink-0 z-20 text-xs">
+        <div id="nav-bar" class="hidden text-white px-3.5 py-2.5 shrink-0 z-20 text-xs" style="background:var(--cm-green)">
           <div class="flex items-center gap-2">
-            <i class="ph-bold ph-navigation-arrow text-cyan-300 text-base"></i>
+            <i class="ph-bold ph-navigation-arrow text-white text-base"></i>
             <div class="flex-1 min-w-0">
-              <div class="text-[10px] text-blue-100"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
+              <div class="text-[10px] text-green-50"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
               <div id="nav-label" class="font-extrabold truncate"></div>
             </div>
             <button id="nav-mute" onclick="toggleNavMute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="음성 켜기/끄기"></button>
             <button onclick="advanceNav(true)" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press">다음</button>
-            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white text-blue-700 font-extrabold tap-press">종료</button>
+            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-green-d)">종료</button>
           </div>
-          <div id="nav-say" class="mt-1 text-[11px] text-blue-50 leading-snug"></div>
+          <div id="nav-say" class="mt-1 text-[11px] text-white leading-snug"></div>
         </div>
 
         <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
@@ -1269,12 +1301,7 @@
 
     function setRecMode(mode) {
       recMode = mode;
-      const on = ['bg-white', 'text-blue-700', 'shadow-sm'];
-      for (const m of ['fast', 'comfort']) {
-        const btn = document.getElementById(`rec-mode-${m}`);
-        btn.classList.toggle('text-slate-500', m !== mode);
-        on.forEach((c) => btn.classList.toggle(c, m === mode));
-      }
+      for (const m of ['fast', 'comfort']) document.getElementById(`rec-mode-${m}`).classList.toggle('cm-active', m === mode);
       if (document.getElementById('rec-results').children.length) runRecommend();
     }
 
@@ -1618,9 +1645,10 @@
     function renderRouteDetail(r, dest, i, morning) {
       const firstWalk = r.legs[0]?.type === 'walk' && r.legs[0].to ? r.legs[0] : null;
       const startButton = r.unavailable ? '' : `
-        <button onclick="startNavigation(${i}, ${morning})" class="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 tap-press">
-          <i class="ph-bold ph-navigation-arrow"></i> 이 경로로 안내 시작${!morning && firstWalk ? ` · ${escapeHtml(firstWalk.to)}까지 걸음 측정` : ''}
+        <button onclick="startNavigation(${i}, ${morning})" class="w-full py-3 cm-go text-sm flex items-center justify-center gap-1.5 tap-press">
+          출발 <i class="ph-bold ph-arrow-circle-right text-lg"></i>
         </button>
+        ${!morning && firstWalk ? `<div class="text-[10px] text-slate-400 text-center">${escapeHtml(firstWalk.to)}까지 걸음도 같이 측정해요</div>` : ''}
         <div class="text-[10px] text-slate-400 text-center">위치를 따라가며 음성으로 안내해요. 화면을 켜 둔 채 앱을 앞에 두세요.</div>`;
       const rides = r.legs.filter((l) => l.type !== 'walk');
       const walkMin = r.legs.filter((l) => l.type === 'walk').reduce((a, l) => a + l.minutes, 0);
@@ -1693,22 +1721,34 @@
     function renderRoutes(routes, { morning = false, dest = '' } = {}) {
       if (!morning) lastRoutes = routes;
       else lastMorningRoutes = routes;
-      return routes.map((r, i) => `
-          <div class="px-3.5 py-2.5 ${r.unavailable ? 'opacity-50' : i === 0 ? 'bg-blue-50/60' : ''}">
-            <div onclick="toggleRoute(this)" class="space-y-1.5 cursor-pointer">
-              <div class="flex items-baseline justify-between">
-                <span class="font-extrabold ${i === 0 ? 'text-blue-700' : 'text-slate-800'}">${i + 1}순위 · ${morning ? `늦어도 ${hhmm(r.leaveBy)} 출발` : `${hhmm(r.arriveAt)} 도착`}</span>
-                <span class="text-[11px] text-slate-500 flex items-center gap-1">${Math.round(r.totalSec / 60)}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}
-                  <i class="route-chevron ph-bold ph-caret-down transition-transform"></i></span>
+      const cards = routes.map((r, i) => {
+        const first = r.legs.find((l) => l.type !== 'walk');
+        const chain = r.legs.map((l) => l.type === 'walk'
+          ? (l.minutes >= 3 ? '<i class="ph-bold ph-person-simple-walk text-slate-500 text-sm"></i>' : '')
+          : `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`)
+          .filter(Boolean).join('<span class="text-slate-300 text-[10px]">·</span>');
+        const waitMin = first ? Math.round(first.waitSec / 60) : null;
+        return `
+          <div class="cm-card px-3 py-2.5 ${r.unavailable ? 'opacity-50' : ''}">
+            <div onclick="toggleRoute(this)" class="flex gap-2 cursor-pointer">
+              <div class="flex-1 min-w-0 space-y-1">
+                <div class="flex items-center gap-1 flex-wrap">${chain}</div>
+                ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
+                ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
               </div>
-              ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-              <div class="flex items-center gap-1 flex-wrap">${r.legs.filter((l) => l.type !== 'walk').map((l) =>
-                `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`).join('<i class="ph-bold ph-caret-right text-slate-400 text-[10px]"></i>')}
-                <span class="text-[10px] text-slate-400 ml-1">눌러서 자세히</span>
+              <div class="text-right shrink-0">
+                <div><span class="cm-min">${Math.round(r.totalSec / 60)}</span><span class="text-[11px] font-bold text-slate-500">분</span></div>
+                <div class="mt-1"><span class="cm-arrive">${morning ? `${hhmm(r.leaveBy)}까지 출발` : `도착 ${hhmm(r.arriveAt)}`}</span></div>
+                ${r.standingMin ? `<div class="text-[10px] text-slate-400 mt-0.5">서서 ${r.standingMin}분</div>` : ''}
+                <i class="route-chevron ph-bold ph-caret-down text-slate-300 transition-transform"></i>
               </div>
             </div>
             ${renderRouteDetail(r, dest, i, morning)}
-          </div>`).join('') || '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
+          </div>`;
+      });
+      if (!cards.length) return '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
+      // 하교 목록만 짙은 패널 위 카드형 (등교 목록은 기존 흰 카드 안이라 구분선만)
+      return morning ? cards.join('') : `<div class="cm-section">추천 경로</div>${cards.join('')}`;
     }
 
     function rideName(l) {
@@ -2617,12 +2657,7 @@
     function renderTripDest() {
       document.getElementById('trip-home-name').textContent = homeDestination || '집 등록';
       document.getElementById('trip-other-name').textContent = tripDest ? tripDest.name : '다른 곳';
-      const on = ['bg-blue-600', 'text-white'], off = ['bg-slate-100', 'text-slate-600'];
-      for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) {
-        const el = document.getElementById(id);
-        el.classList.remove(...on, ...off);
-        el.classList.add(...(active ? on : off));
-      }
+      for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) document.getElementById(id).classList.toggle('cm-active', active);
     }
 
     function setTripDest(i) {
