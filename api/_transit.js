@@ -1,6 +1,6 @@
 // 서울시 버스·지하철 실시간 API 호출과 응답 정리
 import { getCache } from '@vercel/functions';
-import { fetchJsonAt, requireEnv, serviceKey, HttpError } from './_lib.js';
+import { fetchJsonAt, forgetCached, requireEnv, serviceKey, HttpError } from './_lib.js';
 
 const BUS_BASE = 'http://ws.bus.go.kr/api/rest';
 const SUBWAY_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
@@ -11,13 +11,32 @@ const CONGESTION = { 0: null, 3: '여유', 4: '보통', 5: '혼잡', 6: '매우�
 async function busApi(path, params, withTime = false) {
   const key = serviceKey(requireEnv('SEOUL_BUS_KEY'));
   const qs = new URLSearchParams({ ...params, resultType: 'json' });
-  const { data, at } = await fetchJsonAt(`${BUS_BASE}/${path}?serviceKey=${key}&${qs}`);
+  const url = `${BUS_BASE}/${path}?serviceKey=${key}&${qs}`;
+  let { data, at } = await fetchJsonAt(url);
+  // 요청이 몰리면(초당 한도) 401 + '요청제한 횟수 초과'가 옴 → 잠깐 뒤 한 번만 다시
+  if (isLimited(data)) {
+    forgetCached(url);
+    await new Promise((r) => setTimeout(r, 800));
+    ({ data, at } = await fetchJsonAt(url));
+  }
+  // 키 오류·한도 초과는 msgHeader 없이 { error, message }로 옴 → '운행 정보 없음'으로 보이지 않게 오류로
+  if (data.error || !data.msgHeader) {
+    forgetCached(url);
+    const msg = String(data.message || data.error || '알 수 없는 응답');
+    throw new HttpError(isLimited(data) ? 429 : 502, isLimited(data)
+      ? '서울시 버스 API 호출 한도에 걸렸어요. 잠시 뒤 새로고침해 주세요.'
+      : `버스 API 오류: ${msg.slice(0, 100)}`);
+  }
   const header = data.msgHeader;
   if (header && header.headerCd !== '0' && header.headerCd !== '4') {
     throw new HttpError(502, `버스 API 오류 ${header.headerCd}: ${header.headerMsg}`);
   }
   const items = data.msgBody?.itemList ?? [];
   return withTime ? { items, at } : items;
+}
+
+function isLimited(data) {
+  return /횟수 초과/.test(String(data?.message || ''));
 }
 
 // "3분12초후[2번째 전]" → 192초
@@ -43,6 +62,8 @@ function busArrival(it, n) {
     full: it[`isFullFlag${n}`] === '1',
     last: it[`isLast${n}`] === '1',
     stopsAway: Number(msg?.match(/\[(\d+)번째 전\]/)?.[1]) || null,
+    // 같은 차를 다른 정류장에서 찾을 때 씀 (탑승 → 하차 실시간 소요)
+    vehId: it[`vehId${n}`] || null,
   };
 }
 

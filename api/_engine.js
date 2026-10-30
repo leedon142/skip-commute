@@ -30,7 +30,9 @@ const ENDED_TRUST_SEC = 3 * 3600;
 // 기점 막차 출발 후 이 시간이 지나면 국민대 근처도 끊긴 것으로 봄
 const LAST_BUS_SLACK_SEC = 2 * 3600;
 // 비·눈 올 때 도보 시간 배율, 버스 못 탈 확률 가산
-const WEATHER_WALK = { 비: 1.15, '비/눈': 1.2, 눈: 1.25, 빗방울: 1.05, '빗방울·눈날림': 1.1, 눈날림: 1.1 };
+const WEATHER_WALK = { 비: 1.15, '비/눈': 1.2, 눈: 1.25, 소나기: 1.15, 빗방울: 1.05, '빗방울·눈날림': 1.1, 눈날림: 1.1 };
+// 실시간 탑승 시간이 평소(ODsay)와 이만큼 넘게 다르면 경로 설명에 표시
+const LIVE_RIDE_NOTE_SEC = 120;
 const RAIN_MISS_ADD = 0.1;
 // 편한 순 가중치: 서서 가는 1분 = +0.5분, 좌석 여부 모르는 1분 = +0.25분(반반), 환승 1회 = +2분
 const COMFORT = { standing: 0.5, unknownSeat: 0.25, transferSec: 120 };
@@ -151,6 +153,23 @@ async function busLeg(sp, atSec, now, arsOverride, ctx = {}) {
     // 이 차를 놓치면 탈 다음 차
     const after = route.arrivals.find((a) => a !== catchable && a.seconds != null && a.seconds > catchable.seconds);
     if (after) leg.nextVehicle = { waitSec: after.seconds - atSec, passengers: after.passengers, congestion: after.congestion, stopsAway: after.stopsAway };
+    // 도로 정체 반영: 내릴 정류장에도 같은 차(vehId)가 보이면 두 도착 예정 시각의 차가 지금 도로 사정의 탑승 시간
+    // (내릴 정류장 앞에 다른 차가 2대 넘게 있으면 안 보여서 평소 시간 그대로)
+    const endArs = (sp.endArsID ?? sp.passStopList?.stations?.at(-1)?.arsID)?.replace('-', '');
+    if (catchable.vehId && endArs && endArs !== ars) {
+      try {
+        const dest = matchRoute(await busStop(endArs), busNo);
+        const same = dest?.arrivals.find((a) => a.vehId === catchable.vehId && a.seconds != null);
+        if (same && same.seconds > catchable.seconds) {
+          const liveSec = same.seconds - catchable.seconds;
+          leg.liveRideSec = liveSec;
+          leg.rideMin = Math.round(liveSec / 60);
+          if (Math.abs(liveSec - sp.sectionTime * 60) >= LIVE_RIDE_NOTE_SEC) {
+            leg.notes.push(`지금 도로 사정으로 ${leg.rideMin}분 탑승 (평소 ${sp.sectionTime}분)`);
+          }
+        }
+      } catch {}
+    }
   } else {
     // 보이는 마지막 차를 놓쳤으면 그 차 + 배차간격, 운행 중인 차가 안 보이면 배차간격의 절반
     const lastSeen = Math.max(-1, ...(route?.arrivals ?? []).map((a) => a.seconds ?? -1));
@@ -383,10 +402,11 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, w
     leg.preStop = before ? { name: before.stationName, ...pos(before.y, before.x) } : null;
     if (sp.trafficType === 1 && sp.endExitNo) leg.exitNo = sp.endExitNo;
     leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
-    t += leg.waitSec + leg.extraWaitSec + sp.sectionTime * 60;
+    const rideSec = leg.liveRideSec ?? sp.sectionTime * 60;
+    t += leg.waitSec + leg.extraWaitSec + rideSec;
     parts.waitSec += leg.waitSec;
     parts.extraWaitSec += leg.extraWaitSec;
-    parts.rideSec += sp.sectionTime * 60;
+    parts.rideSec += rideSec;
     leg.arriveAt = new Date(now + t * 1000).toISOString();
     legs.push(leg);
   }
@@ -616,6 +636,6 @@ function dataSources(routes, pathSources, weather) {
   if (legs.some((l) => l.stationCongestion?.length)) out.push({ what: '지하철 혼잡도', by: '서울교통공사 30분 단위 통계', at: null, note: '평소 기준' });
   if (legs.some((l) => l.typicalBoarders != null)) out.push({ what: '버스 탑승 인원', by: `서울시 교통카드 승하차 통계 (${profile.month.slice(0, 4)}.${profile.month.slice(4)})`, at: null, note: '평일 평균' });
   if (legs.some((l) => l.type === 'walk')) out.push({ what: '도보', by: 'OpenStreetMap 보행 경로', at: null, note: '내 걸음 속도 배율 반영' });
-  if (weather) out.push({ what: '날씨', by: '기상청 초단기예보', at: null, note: `${weather.at} · ${weather.forTime} 예보` });
+  if (weather) out.push({ what: '날씨', by: `기상청 ${weather.source ?? '초단기예보'}`, at: null, note: `${weather.at} · ${weather.forTime} 예보` });
   return out;
 }
