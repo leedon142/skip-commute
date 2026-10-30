@@ -1463,14 +1463,16 @@
 
     async function disablePush() {
       const st = pushState();
-      await Promise.all(Object.values(st.jobs || {}).map((j) => pushApi({ action: 'cancel', messageId: j.id }).catch(() => {})));
+      await Promise.all(Object.values(st.jobs || {}).flatMap((j) => [j.id, j.checkId]).filter(Boolean)
+        .map((id) => pushApi({ action: 'cancel', messageId: id }).catch(() => {})));
       try { await (await pushSubscription())?.unsubscribe(); } catch {}
       savePushState({ enabled: false, jobs: {} });
       renderPushStatus('알림을 껐어요.');
     }
 
     // kind별로 하나만 예약. 시각이 1분 넘게 바뀌면 예전 예약을 취소하고 다시
-    async function schedulePush(kind, at, params, plannedLeaveBy) {
+    // 등교(prepMin 있음)는 서버가 알람 1시간 전에 다시 계산해서 비·정체면 알람을 앞당김
+    async function schedulePush(kind, at, params, plannedLeaveBy, prepMin) {
       const st = pushState();
       if (!st.enabled || !at || at < Date.now() + 60_000) return;
       const prev = st.jobs?.[kind];
@@ -1481,8 +1483,9 @@
         // 예약에는 GPS 위치를 넣지 않음 (발송 시각엔 정문 기준으로 계산)
         const query = recQuery(params);
         query.delete('lat'); query.delete('lng');
-        const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, cancel: prev?.id });
-        savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId } } });
+        const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, prepMin,
+          cancel: [prev?.id, prev?.checkId].filter(Boolean) });
+        savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId, checkId: r.checkId ?? null } } });
         renderPushStatus();
       } catch (e) {
         renderPushStatus(`알림 예약 실패: ${e.message}`);
@@ -1897,9 +1900,9 @@
         lockW.innerHTML = `<i class="ph-bold ${w.precip ? 'ph-cloud-rain' : 'ph-sun'} text-cyan-300"></i><span>국민대 ${escapeHtml(w.precip ?? '강수 없음')}${w.tempC != null ? ` · ${w.tempC}°C` : ''}</span>`;
         lockW.classList.remove('hidden');
         document.getElementById('sb-temp').textContent = w.tempC != null ? `${w.tempC}°` : '-';
-        document.getElementById('sb-weather').textContent = `${w.precip ?? '강수 없음'} · 기상청 초단기예보`;
+        document.getElementById('sb-weather').textContent = `${w.precip ?? '강수 없음'} · 기상청 ${w.source ?? '예보'}`;
       } else {
-        document.getElementById('sb-weather').textContent = '하교 6시간 전부터 예보 반영';
+        document.getElementById('sb-weather').textContent = '약 2일 안의 예보 반영';
       }
     }
 
@@ -2229,7 +2232,7 @@
         if (!top) throw new Error('경로를 찾지 못했어요');
         const leaveBy = new Date(top.leaveBy);
         const alarmAt = new Date(leaveBy.getTime() - prep * 60000);
-        schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime());
+        schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime(), prep);
         alarm.innerHTML = `${dayLabel} <span class="text-cyan-300">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
         const live = top.legs.some((l) => l.realtime);
         reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
