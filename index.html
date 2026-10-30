@@ -449,46 +449,31 @@
           <div id="tab-pane-1" class="space-y-3">
             
             <!-- 능동 하교 브리핑: 시간표 종료 시각 + 실시간 추천 엔진 (/api/recommend) -->
-            <div class="bg-blue-700 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
-              <div class="flex items-center justify-between text-xs mb-2">
-                <span class="bg-blue-500/30 text-cyan-200 border border-cyan-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                  <i class="ph-bold ph-sparkle text-amber-300"></i> 능동 하교 브리핑
-                </span>
-                <span id="brief-basis" class="text-blue-200 text-[11px] font-mono"></span>
+            <!-- 눈이 덜 피곤하게: 흰 카드, 강조색은 초록 버튼 하나, 숫자 위계로 정보 전달 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 text-slate-900">
+              <div class="flex items-center justify-between text-[11px] text-slate-500">
+                <span class="font-bold flex items-center gap-1"><i class="ph-bold ph-house-line"></i> 집으로 · <span id="home-card-dest" class="truncate">집 미등록</span></span>
+                <span id="brief-basis"></span>
               </div>
-              <h2 id="brief-title" class="text-base font-extrabold leading-snug">실시간 경로 계산 중…</h2>
+              <h2 id="brief-title" class="mt-1.5 text-[15px] font-extrabold leading-snug">실시간 경로 계산 중…</h2>
               <!-- 출발 시각 · 추천 경로 (계산되면 보임) -->
-              <div id="brief-main" class="hidden mt-2.5 space-y-2">
-                <div class="flex items-end gap-2">
+              <div id="brief-main" class="hidden mt-3 space-y-2.5">
+                <div class="flex items-end justify-between">
                   <div>
-                    <div class="text-[10px] text-blue-200">출발</div>
-                    <div id="brief-leave" class="text-3xl font-black leading-none text-amber-300"></div>
+                    <div class="text-[10px] font-bold text-slate-400">이때 나가면 돼요</div>
+                    <div id="brief-leave" class="text-[34px] font-black leading-none tracking-tight"></div>
+                    <div id="brief-board" class="mt-1 text-[11px] text-slate-500"></div>
                   </div>
-                  <div id="brief-board" class="text-xs text-blue-100 pb-0.5"></div>
+                  <div class="text-right">
+                    <div id="brief-eta" class="text-[11px] text-slate-500">-</div>
+                  </div>
                 </div>
-                <div>
-                  <div class="text-[10px] text-blue-200 mb-1">추천 경로</div>
-                  <div id="brief-route" class="flex flex-wrap items-center gap-1 text-xs font-bold"></div>
-                </div>
-                <div class="text-[10px] text-blue-200">추천 이유</div>
+                <div id="brief-route" class="flex flex-wrap items-center gap-1 text-[11px] font-bold"></div>
               </div>
-              <div id="brief-body" class="text-xs text-blue-100 mt-1 leading-relaxed"></div>
+              <div id="brief-body" class="text-[11px] text-slate-500 mt-2.5 leading-relaxed"></div>
 
-              <!-- Destination & Travel Time Grid -->
-              <div class="mt-3 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div class="text-[10px] text-blue-200">등록 목적지 (하차 거점)</div>
-                  <div id="home-card-dest" class="font-bold truncate mt-0.5">집 미등록</div>
-                </div>
-                <div class="border-l border-white/20 pl-2.5">
-                  <div class="text-[10px] text-blue-200">1순위 경로 도착</div>
-                  <div id="brief-eta" class="font-extrabold text-amber-300 mt-0.5">-</div>
-                </div>
-              </div>
-
-              <!-- Action Button to Commute Tab -->
-              <button onclick="goToDismissalCommuteTab()" class="mt-3.5 w-full py-2.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md tap-press">
-                <span>실시간 대안 경로 비교하기</span>
+              <button onclick="goToDismissalCommuteTab()" class="mt-3.5 w-full py-2.5 cm-go text-xs flex items-center justify-center gap-1.5 tap-press">
+                <span>다른 경로와 비교하기</span>
                 <i class="ph-bold ph-arrow-right"></i>
               </button>
             </div>
@@ -1881,9 +1866,9 @@
           return;
         }
         const first = top.legs.find((l) => l.type !== 'walk');
-        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천 · ${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
+        title.textContent = `${first.from}에서 ${rideName(first)} 타기`;
         document.getElementById('brief-leave').textContent = hhmm(top.leaveAt);
-        document.getElementById('brief-board').innerHTML = `${hhmm(first.departAt)} ${escapeHtml(first.from)} 탑승<br>총 ${Math.round(top.totalSec / 60)}분`;
+        document.getElementById('brief-board').textContent = `${hhmm(first.departAt)} 탑승 · 대기 ${Math.round(first.waitSec / 60)}분${first.realtime ? ' (실시간)' : ''}`;
         document.getElementById('brief-route').innerHTML = routeChips(top);
         document.getElementById('brief-main').classList.remove('hidden');
 
@@ -1902,13 +1887,13 @@
         const rides = top.legs.filter((l) => l.type !== 'walk');
         if (top.standingMin) reasons.push(`서서 가는 구간이 약 ${top.standingMin}분 있어요.`);
         else if (rides.every((l) => l.seatLikely === true)) reasons.push('끝까지 앉아 갈 가능성이 높아요.');
-        body.innerHTML = `<ul class="list-disc pl-4 space-y-0.5">${reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`;
-        eta.textContent = `${Math.round(top.totalSec / 60)}분 (${hhmm(top.arriveAt)})`;
+        body.innerHTML = `<div class="text-slate-700">${escapeHtml(reasons[0])}</div>${reasons.length > 1 ? `<details class="mt-0.5"><summary class="cursor-pointer text-slate-400">추천 이유 더 보기</summary><ul class="mt-1 space-y-0.5">${reasons.slice(1).map((r) => `<li>· ${escapeHtml(r)}</li>`).join('')}</ul></details>` : ''}`;
+        eta.innerHTML = `<div><span class="cm-min">${Math.round(top.totalSec / 60)}</span><span class="font-bold">분</span></div><span class="cm-arrive mt-1">도착 ${hhmm(top.arriveAt)}</span>`;
         fillDemoNotice(data, top, first, basis);
         scheduleLiveRefresh(basis.at);
       } catch (e) {
         title.textContent = '경로를 불러오지 못했어요';
-        body.innerHTML = `${escapeHtml(e.message)}<br><button onclick="sessionStorage.clear(); loadHomeBriefing()" class="mt-1.5 px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs font-bold tap-press">다시 시도</button>`;
+        body.innerHTML = `${escapeHtml(e.message)}<br><button onclick="sessionStorage.clear(); loadHomeBriefing()" class="mt-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold tap-press">다시 시도</button>`;
         eta.textContent = '-';
       }
     }
@@ -1916,9 +1901,9 @@
     // 홈 카드용 경로 요약: 🚶 4분 › 🚌 7211 › 🚇 4호선
     function routeChips(r) {
       return r.legs.map((l) => l.type === 'walk'
-        ? `<span class="px-1.5 py-0.5 rounded-md bg-white/10 text-blue-100">🚶 ${l.minutes}분</span>`
-        : `<span class="px-1.5 py-0.5 rounded-md text-white" style="background:${legColor(l)}">${l.type === 'bus' ? '🚌' : '🚇'} ${escapeHtml(rideName(l))}</span>`)
-        .join('<span class="text-blue-300">›</span>');
+        ? `<span class="flex items-center gap-0.5 text-slate-500"><i class="ph-bold ph-person-simple-walk"></i>${l.minutes}분</span>`
+        : `<span class="px-1.5 py-0.5 rounded text-white" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`)
+        .join('<span class="text-slate-300">·</span>');
     }
 
     // 데스크톱 데모의 잠금화면·푸시 배너를 실제 추천 결과로 채움
