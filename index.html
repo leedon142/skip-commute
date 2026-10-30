@@ -835,8 +835,8 @@
                 <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
               </div>
               <div class="flex items-center justify-between">
-                <span>이동 중 돌발 정체 시 실시간 우회 가이드</span>
-                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
+                <span>길안내 중 5분 넘게 늦어지면 더 빠른 경로 제안</span>
+                <input id="set-reroute" type="checkbox" checked onchange="setRerouteEnabled(this.checked)" class="w-4 h-4 accent-blue-600">
               </div>
             </div>
           </div>
@@ -857,6 +857,13 @@
             <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white text-blue-700 font-extrabold tap-press">종료</button>
           </div>
           <div id="nav-say" class="mt-1 text-[11px] text-blue-50 leading-snug"></div>
+          <div id="nav-offer" class="hidden mt-2 p-2.5 rounded-xl bg-white text-slate-900">
+            <div id="nav-offer-text" class="font-bold leading-snug"></div>
+            <div class="mt-2 grid grid-cols-2 gap-2">
+              <button onclick="declineReroute()" class="py-1.5 rounded-lg bg-slate-100 text-slate-700 font-bold tap-press">그대로 가기</button>
+              <button onclick="acceptReroute()" class="py-1.5 rounded-lg bg-blue-600 text-white font-bold tap-press">경로 바꾸기</button>
+            </div>
+          </div>
         </div>
 
         <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
@@ -2787,6 +2794,13 @@
     let navTimer = null;
     let navWakeLock = null;
     let navLastFix = 0;
+    let navLastPos = null;
+    let navBusTimer = null;
+    // 실시간 우회: 계획보다 5분 넘게 늦으면 이동 1회에 최대 1번만 경로 재검색 (ODsay 유료 호출이라 횟수를 막아 둠)
+    const REROUTE_DELAY_MS = 5 * 60e3;
+    const REROUTE_GAIN_MIN = 5; // 이만큼 이상 빨라질 때만 제안
+    const REROUTE_OFFER_MS = 3 * 60e3; // 제안은 3분 지나면 내림 (계산이 낡음)
+    const NAV_BUS_CHECK_MS = 90e3;
 
     function navState() {
       try { return JSON.parse(localStorage.getItem(NAV_KEY)); } catch { return null; }
@@ -2837,11 +2851,14 @@
             ? `${getOff(prev)} ${from}까지 걸어서 갈아타세요${walkMin ? `, 약 ${walkMin}분` : ''}.`
             : `길안내를 시작할게요. ${from}까지 걸어가세요${walkMin ? `. 약 ${walkMin}분 걸려요` : ''}.`,
           target: l.fromPos, radius: subway ? 60 : 30,
+          planAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000,
         });
         steps.push({
           label: `${vehicle} 타기`,
           say: `${from}에 도착했어요. ${withEul(vehicle)} 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
           target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway,
+          planAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3),
+          bus: !subway && l.vehId && l.endArs ? { vehId: l.vehId, endArs: l.endArs, route: l.route, arrive } : null,
           // 지하철: 역에 실제 도착한 시각 기준으로 실시간 열차를 다시 찾아 이후 시각을 맞춤
           subway: subway ? {
             station: l.from, to, vehicle, lineId: l.lineId, dirs: l.dirs, rideMin: l.rideMin,
@@ -2852,6 +2869,7 @@
           label: `${to}에서 내리기`,
           say: `곧 ${to}이에요. 다음 ${subway ? '역' : '정류장'}에서 내릴 준비를 하세요.`,
           target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - (subway ? SUBWAY_ALIGHT_MS : 20e3), underground: subway,
+          planAt: arrive,
         });
         prev = l;
         walkMin = 0;
@@ -2869,7 +2887,10 @@
       const dest = morning ? lastMorningDest : lastDest;
       if (!r || !dest) return triggerToast('경로를 다시 찾은 뒤 시작해 주세요.');
       track('길안내-시작');
-      const nav = { steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now() };
+      const nav = {
+        steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now(),
+        plannedArrive: Date.parse(r.arriveAt), destPos: dest.lat ? { lat: dest.lat, lng: dest.lng } : null, rerouteUsed: false,
+      };
       saveNav(nav);
       // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
       if (!morning && r.legs[0]?.type === 'walk' && r.legs[0].to) startWalkTrip(i, true);
@@ -2882,6 +2903,7 @@
       const nav = navState();
       const bar = document.getElementById('nav-bar');
       clearInterval(navTimer);
+      clearInterval(navBusTimer);
       if (navWatchId != null) navigator.geolocation?.clearWatch(navWatchId);
       navWatchId = null;
       // 3시간 넘은 안내는 정리
@@ -2903,10 +2925,11 @@
       if (navigator.geolocation) {
         navWatchId = navigator.geolocation.watchPosition((p) => {
           navLastFix = Date.now();
+          const here = { lat: p.coords.latitude, lng: p.coords.longitude };
+          navLastPos = here;
           const cur = navState();
           const step = cur?.steps[cur.idx];
           if (!step) return;
-          const here = { lat: p.coords.latitude, lng: p.coords.longitude };
           const d = step.target ? metersBetween(here, step.target) : null;
           renderNavBar(cur, d);
           // GPS 오차만큼 넓게 보되 반경의 2배까지만
@@ -2919,13 +2942,91 @@
       navTimer = setInterval(() => {
         const cur = navState();
         const step = cur?.steps[cur.idx];
+        if (cur?.offer && Date.now() - cur.offer.at > REROUTE_OFFER_MS) declineReroute();
+        if (step?.planAt) maybeReroute(Date.now() - step.planAt);
         if (!step?.timeAt) return;
         const gpsStale = Date.now() - navLastFix > NAV_GPS_STALE_MS;
         if ((step.underground || gpsStale || !step.target) && Date.now() >= step.timeAt) advanceNav();
       }, 5000);
+      navBusTimer = setInterval(checkBusDelay, NAV_BUS_CHECK_MS);
+    }
+
+    function rerouteEnabled() {
+      try { return localStorage.getItem('skip.reroute') !== '0'; } catch { return true; }
+    }
+    function setRerouteEnabled(on) {
+      try { localStorage.setItem('skip.reroute', on ? '1' : '0'); } catch {}
+    }
+
+    // 버스 타는 중: 내릴 정류장의 같은 차 도착 예정으로 얼마나 늦는지 확인
+    async function checkBusDelay() {
+      const nav = navState();
+      const b = nav?.steps[nav.idx]?.bus;
+      if (!b || nav.rerouteUsed || !rerouteEnabled()) return;
+      try {
+        const st = await fetch(`/api/bus?ars=${b.endArs}`).then((res) => res.json());
+        const a = st.routes?.find((r) => r.route === b.route)?.arrivals.find((x) => x.vehId === b.vehId && x.seconds != null);
+        if (!a) return;
+        const age = Math.max(0, (Date.now() - Date.parse(st.fetchedAt)) / 1000) || 0;
+        maybeReroute(Date.now() + (a.seconds - age) * 1000 - b.arrive);
+      } catch {}
+    }
+
+    // 5분 넘게 늦으면 지금 위치에서 다시 검색. 호출 전에 사용 표시를 저장해서 실패·새로고침해도 다시 안 부름
+    // GPS가 없으면(지하 등) 검색도 횟수 차감도 안 함
+    async function maybeReroute(delayMs) {
+      const nav = navState();
+      if (!nav || nav.rerouteUsed || !nav.destPos || delayMs <= REROUTE_DELAY_MS || !rerouteEnabled()) return;
+      if (nav.idx >= nav.steps.length - 1) return; // 마지막 도보는 바꿀 경로가 없음
+      if (!navLastPos || Date.now() - navLastFix > NAV_GPS_STALE_MS) return;
+      nav.rerouteUsed = true;
+      saveNav(nav);
+      track('길안내-재검색');
+      try {
+        const data = await fetchRecommend({
+          lat: navLastPos.lat, lng: navLastPos.lng,
+          homeLat: nav.destPos.lat.toFixed(4), homeLng: nav.destPos.lng.toFixed(4), homeName: nav.dest,
+        });
+        const cur = navState();
+        if (cur?.startedAt !== nav.startedAt) return;
+        const best = data.routes.find((r) => !r.unavailable);
+        const gain = best ? Math.round((cur.plannedArrive + delayMs - Date.parse(best.arriveAt)) / 60e3) : 0;
+        const first = best?.legs.find((l) => l.type !== 'walk');
+        if (!first || gain < REROUTE_GAIN_MIN) return triggerToast('늦어지고 있지만 지금 경로가 가장 빨라요.');
+        const say = `계획보다 ${Math.round(delayMs / 60e3)}분 늦어지고 있어요. ${first.from}에서 ${rideName(first)} 타면 ${gain}분 빨라요.`;
+        cur.offer = { at: Date.now(), say, route: best };
+        saveNav(cur);
+        speak(say);
+        renderNavBar(cur, null);
+      } catch {}
+    }
+
+    function acceptReroute() {
+      const nav = navState();
+      if (!nav?.offer) return;
+      track('길안내-우회');
+      nav.steps = buildNavSteps(nav.offer.route, { name: nav.dest, ...nav.destPos });
+      nav.steps[0].say = nav.steps[0].say.replace('길안내를 시작할게요.', '경로를 바꿨어요.');
+      nav.idx = 0;
+      nav.plannedArrive = Date.parse(nav.offer.route.arriveAt);
+      nav.offer = null;
+      saveNav(nav);
+      clearInterval(navTrainTimer);
+      speak(nav.steps[0].say);
+      resumeNavigation();
+    }
+
+    function declineReroute() {
+      const nav = navState();
+      if (!nav) return;
+      nav.offer = null;
+      saveNav(nav);
+      renderNavBar(nav, null);
     }
 
     function renderNavBar(nav, dist) {
+      document.getElementById('nav-offer').classList.toggle('hidden', !nav.offer);
+      if (nav.offer) document.getElementById('nav-offer-text').textContent = nav.offer.say;
       const step = nav.steps[nav.idx];
       document.getElementById('nav-step').textContent = `${nav.idx + 1}/${nav.steps.length}단계`;
       document.getElementById('nav-label').textContent = step.label;
@@ -3052,6 +3153,7 @@
       }, 2500);
     }
 
+    document.getElementById('set-reroute').checked = rerouteEnabled();
     renderHomeName();
     renderWalkPace();
     showWalkTripBar();

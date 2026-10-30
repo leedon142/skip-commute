@@ -156,6 +156,9 @@ async function busLeg(sp, atSec, now, arsOverride, ctx = {}) {
     // 도로 정체 반영: 내릴 정류장에도 같은 차(vehId)가 보이면 두 도착 예정 시각의 차가 지금 도로 사정의 탑승 시간
     // (내릴 정류장 앞에 다른 차가 2대 넘게 있으면 안 보여서 평소 시간 그대로)
     const endArs = (sp.endArsID ?? sp.passStopList?.stations?.at(-1)?.arsID)?.replace('-', '');
+    // 길안내: 타고 가는 동안 내릴 정류장의 같은 차 도착 예정으로 지연을 확인
+    leg.vehId = catchable.vehId;
+    leg.endArs = endArs;
     if (catchable.vehId && endArs && endArs !== ars) {
       try {
         const dest = matchRoute(await busStop(endArs), busNo);
