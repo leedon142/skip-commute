@@ -243,6 +243,8 @@ async function subwayLeg(sp, atSec, now) {
   };
   const lineId = subwayIdFor(lane);
   const dirs = sp.wayCode === 1 ? ['상행', '내선'] : ['하행', '외선'];
+  // 길안내가 역에 실제 도착한 뒤 같은 노선·방향 열차를 다시 찾을 때 사용
+  Object.assign(leg, { lineId, dirs });
   try {
     const st = await subwayStation(sp.startName);
     const train = st.trains

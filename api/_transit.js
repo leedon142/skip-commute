@@ -93,6 +93,8 @@ export async function subwayStation(name) {
       lineId: t.subwayId,
       direction: t.updnLine,
       heading: t.trainLineNm,
+      // 열차 번호: 길안내에서 탄 열차가 내릴 역에 언제 오는지 추적
+      trainNo: t.btrainNo || null,
       seconds: Number(t.barvlDt) > 0 ? Number(t.barvlDt) : null,
       message: t.arvlMsg2,
       position: t.arvlMsg3,

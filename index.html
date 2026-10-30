@@ -2799,6 +2799,9 @@
     // 지하철은 지하라 GPS가 잘 안 잡혀서 예상 도착 시각으로도 넘어감 (버스도 GPS가 1분 넘게 안 오면 시각 기준)
     const NAV_KEY = 'skip.nav';
     const NAV_GPS_STALE_MS = 60000;
+    // 지하철은 예상보다 일찍 도착하는 경우가 있어 넉넉히 먼저 안내 (내릴 준비 3분 전, 내리세요 1분 전)
+    const SUBWAY_PREP_MS = 180e3;
+    const SUBWAY_ALIGHT_MS = 60e3;
     let navWatchId = null;
     let navTimer = null;
     let navWakeLock = null;
@@ -2829,6 +2832,12 @@
       return l.type === 'subway' && !/역$/.test(name) ? `${name}역` : name;
     }
 
+    // 받침 있으면 '을', 없으면 '를' (예: 내선 방면을, 7211번 버스를)
+    function withEul(word) {
+      const c = word.charCodeAt(word.length - 1) - 0xac00;
+      return `${word}${c >= 0 && c <= 11171 && c % 28 ? '을' : '를'}`;
+    }
+
     function buildNavSteps(r, dest) {
       const steps = [];
       let walkMin = 0;
@@ -2850,13 +2859,18 @@
         });
         steps.push({
           label: `${vehicle} 타기`,
-          say: `${from}에 도착했어요. ${vehicle}를 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
-          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - 150e3, underground: subway,
+          say: `${from}에 도착했어요. ${withEul(vehicle)} 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
+          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway,
+          // 지하철: 역에 실제 도착한 시각 기준으로 실시간 열차를 다시 찾아 이후 시각을 맞춤
+          subway: subway ? {
+            station: l.from, to, vehicle, lineId: l.lineId, dirs: l.dirs, rideMin: l.rideMin,
+            departAt: Date.parse(l.departAt), stationAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000,
+          } : null,
         });
         steps.push({
           label: `${to}에서 내리기`,
           say: `곧 ${to}이에요. 다음 ${subway ? '역' : '정류장'}에서 내릴 준비를 하세요.`,
-          target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - 20e3, underground: subway,
+          target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - (subway ? SUBWAY_ALIGHT_MS : 20e3), underground: subway,
         });
         prev = l;
         walkMin = 0;
@@ -2901,6 +2915,8 @@
       bar.classList.remove('hidden');
       document.body.classList.add('nav-on');
       renderNavBar(nav, null);
+      const rideIdx = nav.steps[nav.idx]?.subway ? nav.idx : nav.steps[nav.idx - 1]?.subway ? nav.idx - 1 : -1;
+      if (rideIdx >= 0 && nav.steps[rideIdx].trainNo) trackSubway(rideIdx);
       // 안내 중엔 화면이 꺼지지 않게 (지원하는 브라우저만)
       navigator.wakeLock?.request('screen').then((l) => { navWakeLock = l; }).catch(() => {});
       if (navigator.geolocation) {
@@ -2950,12 +2966,74 @@
         return triggerToast(`${nav.dest} 도착 · 길안내를 마쳤어요.`);
       }
       saveNav(nav);
-      speak(nav.steps[nav.idx].say);
+      const step = nav.steps[nav.idx];
+      if (step.subway) retimeSubway(nav.idx);
+      else speak(step.say);
       renderNavBar(nav, null);
       if (manual) document.getElementById('nav-dist').textContent = '위치 확인 중';
     }
 
+    // 실시간 도착 정보에서 같은 노선·방향 열차 (서버가 받아온 뒤 지난 시간만큼 빼서 지금 기준 초)
+    async function liveTrains(station, s) {
+      const st = await fetch(`/api/subway?station=${encodeURIComponent(station)}`).then((res) => res.json());
+      const age = Math.max(0, (Date.now() - Date.parse(st.fetchedAt)) / 1000) || 0;
+      return (st.trains || [])
+        .filter((t) => (!s.lineId || t.lineId === s.lineId) && (!s.dirs || s.dirs.includes(t.direction)) && t.seconds != null)
+        .map((t) => ({ ...t, seconds: t.seconds - age }));
+    }
+
+    // 지하철역 도착: 계획 시각 대신 지금 올 실제 열차로 탑승·하차 시각을 다시 계산
+    async function retimeSubway(idx) {
+      const s = navState()?.steps[idx]?.subway;
+      if (!s) return;
+      const now = Date.now();
+      let train = null;
+      try {
+        train = (await liveTrains(s.station, s)).filter((t) => t.seconds >= 20).sort((a, b) => a.seconds - b.seconds)[0] ?? null;
+      } catch {}
+      // 실시간이 없으면 계획보다 늦게 온 만큼만 뒤로 (일찍 왔으면 계획한 열차 그대로)
+      const boardAt = train ? now + train.seconds * 1000 : s.departAt + Math.max(0, now - s.stationAt);
+      const arrive = boardAt + s.rideMin * 60e3;
+      const nav = navState();
+      if (!nav || nav.idx !== idx) return;
+      const step = nav.steps[idx];
+      const wait = Math.round((boardAt - now) / 60e3);
+      step.say = `${s.station}${/역$/.test(s.station) ? '' : '역'}에 도착했어요. ${withEul(s.vehicle)} 타세요. `
+        + (train ? `다음 열차는 ${wait > 0 ? `${wait}분 뒤` : '곧'} 와요. ` : `${hhmm(boardAt)} 출발 예정이에요. `)
+        + `${s.to} 도착은 ${hhmm(arrive)} 예상이에요.`;
+      step.timeAt = arrive - SUBWAY_PREP_MS;
+      step.trainNo = train?.trainNo ?? null;
+      if (nav.steps[idx + 1]) nav.steps[idx + 1].timeAt = arrive - SUBWAY_ALIGHT_MS;
+      saveNav(nav);
+      speak(step.say);
+      renderNavBar(nav, null);
+      trackSubway(idx);
+    }
+
+    // 탄 열차 번호로 내릴 역 도착 예정을 다시 확인 (실시간 범위에 들어오면 하차 안내 시각을 맞춤)
+    let navTrainTimer = null;
+    function trackSubway(idx) {
+      clearInterval(navTrainTimer);
+      navTrainTimer = setInterval(async () => {
+        const nav = navState();
+        const ride = nav?.steps[idx];
+        const alight = nav?.steps[idx + 1];
+        if (!nav || !ride?.trainNo || !alight || nav.idx > idx + 1) return clearInterval(navTrainTimer);
+        try {
+          const t = (await liveTrains(ride.subway.to, ride.subway)).find((x) => x.trainNo === ride.trainNo);
+          if (!t) return;
+          const arrive = Date.now() + t.seconds * 1000;
+          const cur = navState();
+          if (!cur || cur.idx > idx + 1) return;
+          cur.steps[idx].timeAt = arrive - SUBWAY_PREP_MS;
+          cur.steps[idx + 1].timeAt = arrive - SUBWAY_ALIGHT_MS;
+          saveNav(cur);
+        } catch {}
+      }, 30000);
+    }
+
     function stopNavigation() {
+      clearInterval(navTrainTimer);
       saveNav(null);
       speechSynthesis?.cancel?.();
       resumeNavigation();
