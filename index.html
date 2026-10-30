@@ -235,7 +235,7 @@
       <!-- ============================================================= -->
       <!-- 1. SCREEN A: iOS LOCK SCREEN                                 -->
       <!-- ============================================================= -->
-      <section id="view-lockscreen" class="absolute inset-0 z-30 flex flex-col justify-between p-6 text-white" style="background: linear-gradient(180deg, #090d16 0%, #111827 50%, #030712 100%);">
+      <section id="view-lockscreen" class="absolute inset-0 z-30 flex flex-col justify-between p-6 text-white" style="background: #0b111c;">
         
         <!-- Top Clock & Date Area -->
         <div class="text-center mt-6">
@@ -258,7 +258,7 @@
           <p id="lock-card-body" class="text-[11px] text-slate-300 mt-1 leading-relaxed">
             아직 계산 전이라 예시 화면이에요. 집을 등록하면 수업 끝나는 시각 기준 실제 경로가 표시돼요.
           </p>
-          <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
+          <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
             <i class="ph-bold ph-door-open"></i>
             <span>앱 열고 상세 3가지 경로 확인</span>
           </button>
@@ -290,7 +290,7 @@
       <!-- ============================================================= -->
       <!-- 2. SCREEN B: iOS SPRINGBOARD (IPHONE HOME SCREEN)            -->
       <!-- ============================================================= -->
-      <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);">
+      <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: #0f172a;">
         
         <div class="text-center -mb-2"><span class="demo-chip">시연 화면 · 실제 아이폰 홈 아님</span></div>
         <!-- Springboard Top Grid & Widgets -->
@@ -317,7 +317,7 @@
             
             <!-- PROMINENT '⚡ SKIP' APP ICON -->
             <button onclick="openSkipApp()" class="flex flex-col items-center gap-1 group tap-press">
-              <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
+              <div class="relative w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
                 <i class="ph-fill ph-lightning text-3xl text-amber-300"></i>
                 <!-- Red Notification Badge -->
                 <span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-slate-900 shadow">1</span>
@@ -327,7 +327,7 @@
 
             <!-- Safari -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-blue-400 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-compass text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">Safari</span>
@@ -343,7 +343,7 @@
 
             <!-- Notes -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-amber-200 to-yellow-400 flex items-center justify-center text-amber-900 shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-amber-200 flex items-center justify-center text-amber-900 shadow-md">
                 <i class="ph-bold ph-note-pencil text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">메모</span>
@@ -351,7 +351,7 @@
 
             <!-- Maps -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-emerald-400 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-map-trifold text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">지도</span>
@@ -367,7 +367,7 @@
 
             <!-- Instagram -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-amber-500 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-instagram-logo text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">Instagram</span>
@@ -449,7 +449,7 @@
           <div id="tab-pane-1" class="space-y-3">
             
             <!-- 능동 하교 브리핑: 시간표 종료 시각 + 실시간 추천 엔진 (/api/recommend) -->
-            <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-blue-900 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+            <div class="bg-blue-700 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
               <div class="flex items-center justify-between text-xs mb-2">
                 <span class="bg-blue-500/30 text-cyan-200 border border-cyan-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                   <i class="ph-bold ph-sparkle text-amber-300"></i> 능동 하교 브리핑
@@ -653,7 +653,7 @@
             <div id="submode-morning" class="space-y-3 hidden">
               
               <!-- 시간표 연동 등교 알람 (/api/recommend?direction=school) -->
-              <div class="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-4 text-white shadow-md">
+              <div class="bg-indigo-900 rounded-2xl p-4 text-white shadow-md">
                 <div class="flex items-center justify-between text-xs mb-2">
                   <span class="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold">
                     ⏰ 시간표 연동 등교 알람
@@ -1592,7 +1592,7 @@
       }
       const total = segs.reduce((a, b) => a + b.min, 0) || 1;
       return `<div class="flex h-3 rounded-full overflow-hidden bg-slate-100">${segs.map((g) =>
-        `<div title="${escapeHtml(g.label)}" style="width:${(g.min / total) * 100}%;background:${g.color}${g.dashed ? ';background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(255,255,255,.7) 3px 6px)' : ''}"></div>`).join('')}</div>`;
+        `<div title="${escapeHtml(g.label)}" style="width:${(g.min / total) * 100}%;background:${g.color}"></div>`).join('')}</div>`;
     }
 
     function stationCongestionBars(l) {
