@@ -673,26 +673,30 @@
             
             <!-- One-Touch Quick Report Box -->
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
-              <div class="font-bold text-xs text-slate-800 mb-1">📢 실시간 정류장 원터치 제보</div>
-              <p class="text-[11px] text-slate-500 mb-3">
-                지금 정류장 대기 상황을 눌러 학우들의 경로 판단을 도와주세요!
-              </p>
+              <div class="font-extrabold text-[13px] text-slate-900 mb-1 flex items-center gap-1"><i class="ph-bold ph-megaphone-simple text-slate-500"></i> 지금 정류장 줄 상황</div>
+              <p class="text-[11px] text-slate-500 mb-3">한 번 누르면 다른 학생들 경로 판단에 보여줘요.</p>
               <div class="flex items-center justify-between mb-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
                 <span class="text-slate-500">제보 위치 <b id="report-stop" class="text-slate-800">확인 중…</b></span>
                 <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
               </div>
-              <div class="grid grid-cols-3 gap-2 text-xs">
-                <button onclick="submitReport('여유 (바로 탑승 가능)')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🟢</span>
-                  <span>여유</span>
+              <div class="grid grid-cols-3 gap-2">
+                <button onclick="submitReport('여유 (바로 탑승 가능)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-user text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">여유</span>
+                  <span class="text-[10px] text-slate-500">바로 타요</span>
+                  <span class="flex gap-0.5 mt-0.5"><span class="w-3 h-1.5 rounded-sm" style="background:#2fa84f"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e2e8f0"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e2e8f0"></span></span>
                 </button>
-                <button onclick="submitReport('보통 (1대 대기 후 탑승)')" class="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🟡</span>
-                  <span>보통</span>
+                <button onclick="submitReport('보통 (1대 대기 후 탑승)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-users text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">보통</span>
+                  <span class="text-[10px] text-slate-500">한 대 보내요</span>
+                  <span class="flex gap-0.5 mt-0.5"><span class="w-3 h-1.5 rounded-sm" style="background:#e8a000"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e8a000"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e2e8f0"></span></span>
                 </button>
-                <button onclick="submitReport('혼잡 (만차 / 줄 매우 긺)')" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🔴</span>
-                  <span>혼잡</span>
+                <button onclick="submitReport('혼잡 (만차 / 줄 매우 긺)')" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-users-three text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">혼잡</span>
+                  <span class="text-[10px] text-slate-500">줄이 길어요</span>
+                  <span class="flex gap-0.5 mt-0.5"><span class="w-3 h-1.5 rounded-sm" style="background:#e0484f"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e0484f"></span><span class="w-3 h-1.5 rounded-sm" style="background:#e0484f"></span></span>
                 </button>
               </div>
             </div>
