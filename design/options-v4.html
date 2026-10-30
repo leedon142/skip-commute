@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SKIP 홈 시안 v4</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#E7E9EE;font-family:'Pretendard Variable',system-ui,sans-serif;color:#191F28;padding:36px 28px 64px}
+h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.lead{font-size:14px;color:#5E6673;margin:6px 0 28px;line-height:1.6}
+.phones{display:flex;gap:32px;flex-wrap:wrap}
+.phone{width:375px;height:812px;border-radius:40px;overflow:hidden;display:flex;flex-direction:column;background:#fff;position:relative;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 30px 50px -30px rgba(25,31,40,.4)}
+.phone p,.phone h2,.phone h3{margin:0}
+.ic{display:block;object-fit:contain}
+.num{font-variant-numeric:tabular-nums}
+
+.top{display:flex;align-items:center;gap:6px;padding:24px 24px 0}
+.top .school{display:flex;align-items:center;gap:6px;font-size:17px;font-weight:700;letter-spacing:-.03em;margin-right:auto}
+.top .school svg{width:16px;height:16px;color:#8B95A1}
+.body{flex:1;padding:0 24px;display:flex;flex-direction:column}
+h2.head{font-size:28px;line-height:1.37;font-weight:700;letter-spacing:-.045em;margin-top:30px}
+.sub{font-size:15.5px;color:#6B7684;font-weight:500;margin-top:10px;letter-spacing:-.02em}
+
+.sum{margin-top:24px;background:#F3F5F8;border-radius:28px;padding:18px 20px;display:flex;align-items:center;gap:16px}
+.sum .ic{width:60px;height:60px;flex:none}
+.sum .t{flex:1}
+.sum .t small{display:block;font-size:14px;color:#6B7684;font-weight:500}
+.sum .t b{display:block;font-size:24px;font-weight:700;letter-spacing:-.04em;margin-top:1px}
+.sum .t b span{font-size:15px;font-weight:600;color:#6B7684;letter-spacing:-.02em;margin-left:6px}
+
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin-top:30px}
+.sec h3{font-size:19px;font-weight:700;letter-spacing:-.035em}
+.sec span{font-size:13px;color:#8B95A1;font-weight:500}
+.rows{margin-top:6px}
+.row{display:flex;align-items:center;gap:14px;padding:13px 0}
+.bd{display:inline-flex;align-items:center;justify-content:center;width:56px;height:32px;border-radius:10px;color:#fff;font-size:15px;font-weight:700;flex:none;letter-spacing:-.01em}
+.row .tx{flex:1;min-width:0}
+.row .tx b{display:block;font-size:16.5px;font-weight:600;letter-spacing:-.03em}
+.row .tx small{display:block;font-size:13.5px;color:#8B95A1;font-weight:500;margin-top:2px}
+.row .eta{font-size:18px;font-weight:700;letter-spacing:-.03em;text-align:right}
+.row .eta.soon{color:#3182F6}
+.row .eta small{display:block;font-size:12.5px;color:#F04452;font-weight:600;letter-spacing:0;margin-bottom:1px}
+
+.hero-panel{margin-top:22px;height:164px;border-radius:30px;background:#EAF3FF;position:relative;overflow:hidden}
+.hero-panel .a{position:absolute;left:50%;top:50%;width:112px;height:112px;transform:translate(-62%,-48%)}
+.hero-panel .b{position:absolute;width:68px;height:68px;right:46px;bottom:22px}
+.hero-panel .c{position:absolute;width:40px;height:40px;left:38px;top:18px;opacity:.95}
+.next{display:flex;align-items:center;gap:14px;margin-top:22px;background:#F3F5F8;border-radius:22px;padding:14px 18px}
+.next .ic{width:40px;height:40px;flex:none}
+.next div{flex:1}
+.next b{display:block;font-size:15.5px;font-weight:600;letter-spacing:-.03em}
+.next small{display:block;font-size:13.5px;color:#6B7684;font-weight:500;margin-top:1px}
+.next u{text-decoration:none;font-size:14px;font-weight:700;color:#3182F6}
+.err{display:flex;align-items:center;gap:14px;margin-top:6px;background:#F3F5F8;border-radius:20px;padding:14px 16px}
+.err .ic{width:36px;height:36px;flex:none}
+.err b{display:block;font-size:15px;font-weight:600;letter-spacing:-.03em}
+.err small{display:block;font-size:13px;color:#6B7684;margin-top:1px;font-weight:500}
+.err u{text-decoration:none;font-size:14px;font-weight:700;color:#3182F6;flex:none}
+
+.grow{flex:1}
+.cta{margin:12px 24px 14px;height:58px;border:0;border-radius:20px;background:#3182F6;color:#fff;font:700 17.5px 'Pretendard Variable',sans-serif;letter-spacing:-.02em;display:block;width:calc(100% - 48px)}
+nav{display:flex;padding:10px 4px 20px;border-top:1px solid #F0F2F5;background:#fff}
+nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:500;color:#A3ABB6}
+nav a .ic{width:30px;height:30px;filter:grayscale(1);opacity:.42}
+nav a.on{color:#191F28;font-weight:700}
+nav a.on .ic{filter:none;opacity:1}
+</style>
+</head>
+<body>
+<h1>SKIP 홈 시안 v4</h1>
+<p class="lead">화이트 바탕에 3D 아이콘. 집을 등록한 뒤와 등록하기 전, 두 화면이에요. 버스 번호와 시각은 예시예요.<br>아이콘은 Microsoft Fluent Emoji 3D(MIT 라이선스)예요. 적용할 때는 앱에 파일로 넣어서 쓸 수 있어요.</p>
+
+<div class="phones">
+
+<!-- 등록 후 -->
+<div class="phone">
+  <div class="top"><span class="school"><img class="ic" style="width:28px;height:28px" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/School/3D/school_3d.png" alt="">국민대학교<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span><img class="ic" style="width:30px;height:30px" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bell/3D/bell_3d.png" alt="알림"></div>
+  <div class="body">
+    <h2 class="head">정문에서 3분 뒤에<br>110B를 타면 돼요</h2>
+    <p class="sub">홍대입구역에 17:51에 도착해요</p>
+    <div class="sum">
+      <img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/House%20with%20garden/3D/house_with_garden_3d.png" alt="">
+      <div class="t"><small>집까지</small><b class="num">52분<span>걸어서 6분 포함</span></b></div>
+    </div>
+    <div class="sec"><h3>정문 버스</h3><span class="num">16:59 기준</span></div>
+    <div class="rows">
+      <div class="row"><span class="bd" style="background:#3D5BAB">110B</span><div class="tx"><b>길음·신설동 방면</b><small>집 가는 버스</small></div><div class="eta soon num"><small>곧 도착</small>3분</div></div>
+      <div class="row"><span class="bd" style="background:#3D5BAB">1020</span><div class="tx"><b>광화문 방면</b></div><div class="eta num">8분</div></div>
+      <div class="row"><span class="bd" style="background:#53A024">7211</span><div class="tx"><b>우이동 방면</b></div><div class="eta num">14분</div></div>
+    </div>
+    <div class="next"><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Alarm%20clock/3D/alarm_clock_3d.png" alt=""><div><b>오늘 마지막 수업은 17:50에 끝나요</b><small>끝나기 5분 전에 알려드릴까요?</small></div><u>알림 켜기</u></div>
+    <div class="grow"></div>
+  </div>
+  <button class="cta">이 경로로 출발</button>
+  <nav>
+    <a class="on"><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/House/3D/house_3d.png" alt="">홈</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Calendar/3D/calendar_3d.png" alt="">시간표</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bus/3D/bus_3d.png" alt="">통학</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Megaphone/3D/megaphone_3d.png" alt="">제보</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bust%20in%20silhouette/3D/bust_in_silhouette_3d.png" alt="">내 정보</a>
+  </nav>
+</div>
+
+<!-- 등록 전 -->
+<div class="phone">
+  <div class="top"><span class="school"><img class="ic" style="width:28px;height:28px" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/School/3D/school_3d.png" alt="">국민대학교<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></span><img class="ic" style="width:30px;height:30px" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bell/3D/bell_3d.png" alt="알림"></div>
+  <div class="body">
+    <h2 class="head">집을 등록하면<br>집 가는 길을 알려드려요</h2>
+    <p class="sub">주소나 가까운 역 하나면 돼요.</p>
+    <div class="hero-panel">
+      <img class="ic c" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Alarm%20clock/3D/alarm_clock_3d.png" alt="">
+      <img class="ic a" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/House%20with%20garden/3D/house_with_garden_3d.png" alt="">
+      <img class="ic b" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bus/3D/bus_3d.png" alt="">
+    </div>
+    <div class="sec"><h3>정문 버스</h3><span class="num">16:59 기준</span></div>
+    <div class="rows">
+      <div class="row"><span class="bd" style="background:#3D5BAB">110B</span><div class="tx"><b>길음·신설동 방면</b></div><div class="eta soon num"><small>곧 도착</small>3분</div></div>
+      <div class="row"><span class="bd" style="background:#3D5BAB">1020</span><div class="tx"><b>광화문 방면</b></div><div class="eta num">8분</div></div>
+    </div>
+    <div class="err"><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Metro/3D/metro_3d.png" alt=""><div style="flex:1"><b>우이신설선 정보를 못 불러왔어요</b><small>잠시 뒤에 다시 시도해 주세요.</small></div><u>다시 불러오기</u></div>
+    <div class="grow"></div>
+  </div>
+  <button class="cta">집 등록하기</button>
+  <nav>
+    <a class="on"><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/House/3D/house_3d.png" alt="">홈</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Calendar/3D/calendar_3d.png" alt="">시간표</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bus/3D/bus_3d.png" alt="">통학</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Megaphone/3D/megaphone_3d.png" alt="">제보</a>
+    <a><img class="ic" src="https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/Bust%20in%20silhouette/3D/bust_in_silhouette_3d.png" alt="">내 정보</a>
+  </nav>
+</div>
+
+</div>
+</body>
+</html>

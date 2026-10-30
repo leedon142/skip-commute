@@ -4,3 +4,4 @@ data/*.py
 .env*
 data/raw/
 data/.odsay-cache.json
+design/
