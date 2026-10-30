@@ -1317,7 +1317,7 @@
       if (l.type === 'walk') {
         return `<div class="text-slate-500">🚶 도보 ${l.minutes}분${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.estimated ? ' (직선거리 추정)' : ''}</div>`;
       }
-      const icon = l.type === 'bus' ? '🚌' : '🚇';
+      const icon = l.type === 'bus' ? '🚌' : l.type === 'shuttle' ? '🚐' : '🚇';
       const name = l.type === 'bus' ? `${escapeHtml(l.route)}번` : escapeHtml(l.line);
       const wait = `${Math.round(l.waitSec / 60)}분 대기${l.realtime ? '' : '(추정)'}`;
       const crowd = l.type === 'bus'
@@ -1569,6 +1569,7 @@
     function legColor(l) {
       if (l.type === 'walk') return '#94a3b8';
       if (l.type === 'bus') return BUS_COLORS[l.busType] || '#475569';
+      if (l.type === 'shuttle') return '#0f766e';
       const k = Object.keys(LINE_COLORS).find((name) => String(l.line).includes(name));
       return LINE_COLORS[k] || '#475569';
     }
@@ -1647,6 +1648,7 @@
             <div class="text-[10px] text-slate-500">대기 ${Math.round(l.waitSec / 60)}분${l.realtime ? ' (실시간)' : l.timetable ? ' (시간표)' : ' (추정)'}${l.extraWaitSec ? ` + 만차 대비 ${Math.round(l.extraWaitSec / 60)}분` : ''} · ${l.rideMin}분 탑승
               ${l.seatLikely === true ? ' · <span class="text-emerald-700 font-bold">착석 가능</span>' : l.seatLikely === false ? ' · <span class="text-rose-600 font-bold">서서 감</span>' : ''}</div>
             ${next}
+            ${l.type === 'shuttle' ? `<div class="text-[10px] text-slate-500">${l.notes.map(escapeHtml).join(' · ')}</div>` : ''}
             ${stationCongestionBars(l)}
             ${stops}
           </div>
@@ -2284,6 +2286,15 @@
     }
 
     // 주간 시간표 격자: 세로 = 시간, 가로 = 요일
+    // 국민대 1교시 09:00 시작, 시간표 한 칸(1시간)을 한 교시로 봄 (예: 10:30~12:00 → 2~3교시)
+    const FIRST_PERIOD_HOUR = 9;
+    function periodLabel(c) {
+      const first = Math.floor(toMinutes(c.start) / 60) - FIRST_PERIOD_HOUR + 1;
+      const last = Math.ceil(toMinutes(c.end) / 60) - 1 - FIRST_PERIOD_HOUR + 1;
+      if (first < 1 || last < first) return '';
+      return first === last ? `${first}교시` : `${first}~${last}교시`;
+    }
+
     function renderTimetable() {
       const list = document.getElementById('timetable-list');
       if (!timetable.length) {
@@ -2315,6 +2326,7 @@
                   style="top:${top + 1}px;height:${h - 2}px;background:${bg};border-left:3px solid ${fg}">
                   <div class="text-[10px] font-bold leading-tight text-slate-900 break-keep">${escapeHtml(c.name)}</div>
                   ${h > 40 ? `<div class="text-[9px] leading-tight text-slate-500 truncate">${escapeHtml(c.room)}</div>` : ''}
+                  ${h > 56 && periodLabel(c) ? `<div class="text-[9px] leading-tight font-bold truncate" style="color:${fg}">${periodLabel(c)}</div>` : ''}
                   ${last ? `<i class="ph-bold ph-bell-ringing absolute bottom-0.5 right-0.5 text-[9px]" style="color:${fg}" title="하교 브리핑 기준"></i>` : ''}
                 </button>`;
             }).join('')}
@@ -2322,16 +2334,16 @@
       };
 
       list.innerHTML = `
-        <div class="flex text-[10px] font-bold text-slate-500 mb-1 pl-5">
+        <div class="flex text-[10px] font-bold text-slate-500 mb-1 pl-7">
           ${days.map((d) => `<div class="flex-1 text-center ${d === today ? 'text-blue-600' : ''}">${DAY_NAMES[d]}</div>`).join('')}
         </div>
         <div class="flex">
-          <div class="relative w-5 shrink-0" style="height:${height}px">
-            ${hours.map((h) => `<div class="absolute right-1 text-[9px] text-slate-400 -translate-y-1/2" style="top:${(h - firstH) * 60 * PX_PER_MIN}px">${h}</div>`).join('')}
+          <div class="relative w-7 shrink-0" style="height:${height}px">
+            ${hours.map((h) => `<div class="absolute right-1 text-right leading-none -translate-y-1/2" style="top:${(h - firstH) * 60 * PX_PER_MIN}px">${h >= FIRST_PERIOD_HOUR ? `<div class="text-[9px] font-bold text-slate-600">${h - FIRST_PERIOD_HOUR + 1}</div>` : ''}<div class="text-[8px] text-slate-400">${h}시</div></div>`).join('')}
           </div>
           ${days.map(column).join('')}
         </div>
-        <div class="mt-1.5 text-[10px] text-slate-400 flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> 요일별 마지막 수업이 끝나는 시각에 하교 경로를 계산해요. 과목을 누르면 자세히 보고 시간·강의실을 고칠 수 있어요.</div>`;
+        <div class="mt-1.5 text-[10px] text-slate-400 flex items-center gap-1"><i class="ph-bold ph-bell-ringing"></i> 왼쪽 굵은 숫자는 교시(1교시 09:00부터 1시간 단위). 요일별 마지막 수업이 끝나는 시각에 하교 경로를 계산해요. 과목을 누르면 자세히 보고 시간·강의실을 고칠 수 있어요.</div>`;
     }
 
     function addClass() {
@@ -2632,7 +2644,7 @@
           <span class="flex items-center gap-1.5 text-blue-600">
             <i class="ph-bold ph-bell-ringing"></i> ${escapeHtml(c.name)}
           </span>
-          <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
+          <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">${DAY_NAMES[c.day]} ${c.start}-${c.end}${periodLabel(c) ? ` · ${periodLabel(c)}` : ''}</span>
         </div>
         <div class="text-[11px] text-slate-600">
           강의실: <strong>${escapeHtml(c.room || '-')}</strong><br>${role}
@@ -3136,8 +3148,10 @@
             : `길안내를 시작할게요. ${from}까지 걸어가세요${walkMin ? `. 약 ${walkMin}분 걸려요` : ''}.`,
           target: l.fromPos, radius: subway ? 60 : 30, bus,
         });
+        // 셔틀: 타는 단계에서 '셔틀 탔어요', 내리는 단계에서 '내렸어요' 버튼 (다른 학생에게 실제 출발·소요 공유)
+        const shuttle = l.type === 'shuttle' ? { from: l.shuttleFrom, line: l.shuttleLine, dep: l.dep } : null;
         steps.push({
-          label: `${vehicle} 타기`,
+          label: `${vehicle} 타기`, shuttle: shuttle && { ...shuttle, act: 'board' },
           say: `${from}에 도착했어요. ${withEul(vehicle)} 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
           target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway, bus,
           // 지하철: 역에 실제 도착한 시각 기준으로 실시간 열차를 다시 찾아 이후 시각을 맞춤
@@ -3147,7 +3161,7 @@
           } : null,
         });
         steps.push({
-          label: `${to}에서 내리기`,
+          label: `${to}에서 내리기`, shuttle: shuttle && { ...shuttle, act: 'alight' },
           say: `곧 ${to}이에요. 다음 ${subway ? '역' : '정류장'}에서 내릴 준비를 하세요.`,
           target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - (subway ? SUBWAY_ALIGHT_MS : 20e3), underground: subway,
         });
@@ -3256,6 +3270,7 @@
       else if (step.nextBus) briefTransfer(nav.idx);
       else speak(step.say);
       if (step.bus) watchBus();
+      renderNavAlert(nav);
       renderNavBar(nav, null);
       if (manual) document.getElementById('nav-dist').textContent = '위치 확인 중';
     }
@@ -3336,6 +3351,22 @@
 
     function renderNavAlert(nav) {
       const box = document.getElementById('nav-alert');
+      const sh = nav?.steps[nav.idx]?.shuttle;
+      if (sh && !nav.alert) {
+        const riding = shuttleRide();
+        if (sh.act === 'board' && !riding) {
+          box.classList.remove('hidden');
+          box.innerHTML = `셔틀에 타면 눌러 주세요. 다른 학생들에게 실제 출발 시각이 보여요.
+            <button onclick="shuttleBoard(['${sh.from}']).then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 bg-slate-900 text-white font-extrabold tap-press">셔틀 탔어요</button>`;
+          return;
+        }
+        if (sh.act === 'alight' && riding) {
+          box.classList.remove('hidden');
+          box.innerHTML = `내리면 눌러 주세요. 걸린 시간이 다음 추천에 쓰여요.
+            <button onclick="shuttleAlight().then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 cm-go font-extrabold tap-press">내렸어요</button>`;
+          return;
+        }
+      }
       if (!nav?.alert || Date.now() - nav.alert.at > 20 * 60e3) return box.classList.add('hidden');
       box.classList.remove('hidden');
       box.innerHTML = `<div class="font-extrabold text-rose-700">⚠ ${escapeHtml(nav.alert.text)}</div>

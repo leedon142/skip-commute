@@ -6,6 +6,8 @@ import { walkRoute } from './_walk.js';
 import { weatherAt } from './_weather.js';
 import { kakao } from './_kakao.js';
 import { listReports, summarize, REPORT_APPLY_SEC } from './_reports.js';
+import { shuttleStatus } from './_shuttle.js';
+import shuttleData from '../data/shuttle.json' with { type: 'json' };
 import profile from '../data/boarding_profile.json' with { type: 'json' };
 import subwayStats from '../data/subway_congestion.json' with { type: 'json' };
 
@@ -35,6 +37,105 @@ const WEATHER_WALK = { 비: 1.15, '비/눈': 1.2, 눈: 1.25, 빗방울: 1.05, '�
 const RAIN_MISS_ADD = 0.1;
 // 편한 순 가중치: 서서 가는 1분 = +0.5분, 좌석 여부 모르는 1분 = +0.25분(반반), 환승 1회 = +2분
 const COMFORT = { standing: 0.5, unknownSeat: 0.25, transferSec: 120 };
+
+// 국민대 셔틀 (학교 공지 시간표, 실시간 위치 없음)
+const SHUTTLE_STOPS = shuttleData.stops;
+// 탑승 시간: 학생 '탔어요·내렸어요' 기록이 3회 이상이면 중간값, 아니면 시간표상 길음역 출발 → 국민대 출발 최소 간격
+// (종일셔틀 1호차 13:45 길음역 → 14:00 국민대 = 15분, 정차·회차 포함이라 실제 탑승은 이보다 짧을 수 있음)
+const SHUTTLE_RIDE_FALLBACK_MIN = 15;
+const SHUTTLE_MIN_RECORDS = 3;
+// 하교: 출발 시각부터 이 안에 셔틀이 있을 때만 셔틀 경로를 만듦 (길음역 → 집 경로 ODsay 호출 절약)
+const SHUTTLE_LOOKAHEAD_SEC = 60 * 60;
+
+const hmSec = (hm) => Number(hm.slice(0, 2)) * 3600 + Number(hm.slice(3, 5)) * 60;
+
+// froms 정류장에서 떠나는 편 [{ line, lineName, from, to, depSec }]
+function shuttleDeps(froms) {
+  return shuttleData.lines.flatMap((l) => l.departures.filter((d) => froms.includes(d.from))
+    .flatMap((d) => d.times.map((t) => ({ line: l.id, lineName: l.name, from: d.from, to: d.to, dep: t, depSec: hmSec(t) }))))
+    .sort((a, b) => a.depSec - b.depSec);
+}
+
+function shuttleSoon(froms, ms) {
+  const k = kstClock(new Date(ms));
+  if (k.day === 0 || k.day === 6) return false;
+  return shuttleDeps(froms).some((d) => d.depSec >= k.sec && d.depSec <= k.sec + SHUTTLE_LOOKAHEAD_SEC);
+}
+
+function shuttleLeg(sp, atSec, now, ctx = {}) {
+  const k = kstClock(new Date(now + atSec * 1000));
+  const leg = {
+    type: 'shuttle', line: '국민대 셔틀', from: sp.startName, to: sp.endName, stops: [sp.startName, sp.endName],
+    realtime: false, timetable: true, waitSec: 0, extraWaitSec: 0, missProb: 0, seatLikely: null, notes: [],
+    rideMin: SHUTTLE_RIDE_FALLBACK_MIN,
+  };
+  const next = k.day === 0 || k.day === 6 ? null : shuttleDeps(sp.froms).find((d) => d.depSec >= k.sec + BOARD_BUFFER_SEC);
+  if (!next) {
+    leg.ended = true;
+    leg.notes.push(k.day === 0 || k.day === 6 ? '셔틀은 평일만 운행' : '오늘 셔틀 운행 끝');
+    return leg;
+  }
+  const stop = SHUTTLE_STOPS[next.from];
+  Object.assign(leg, {
+    line: next.lineName, shuttleLine: next.line, shuttleFrom: next.from, dep: next.dep,
+    from: stop.name, waitSec: next.depSec - k.sec,
+  });
+  leg.stops = [leg.from, leg.to];
+  const ride = ctx.shuttle?.ride?.[`${next.line}|${next.from}`];
+  if (ride && ride.n >= SHUTTLE_MIN_RECORDS) {
+    leg.rideMin = ride.medianMin;
+    leg.rideBasis = `학생 탑승 기록 ${ride.n}회 중간값`;
+  } else {
+    leg.rideBasis = `시간표 간격 기준 추정 (길음역→국민대 출발 최소 ${SHUTTLE_RIDE_FALLBACK_MIN}분${ride ? `, 탑승 기록 ${ride.n}회는 아직 적음` : ''})`;
+  }
+  leg.notes.push(`${next.dep} 출발 (학교 시간표) · 탑승 ${leg.rideMin}분: ${leg.rideBasis}`);
+  const trip = ctx.shuttle?.trips?.[`${next.line}|${next.from}|${next.dep}`];
+  if (trip) leg.notes.push(`오늘 이 편 탑승 기록 ${trip.boardings}명`);
+  if (stop.campus) leg.notes.push(`${stop.name}은 좌표가 없어 정문 정류장까지 도보로 계산`);
+  return leg;
+}
+
+// 셔틀 구간을 ODsay 경로 모양으로 (evaluatePath가 다른 구간과 같이 계산)
+function shuttleSubPath(froms, toStop) {
+  const a = SHUTTLE_STOPS.kookmin.lat && froms.includes('kookmin') ? SHUTTLE_STOPS.kookmin : SHUTTLE_STOPS[froms[0]];
+  const b = SHUTTLE_STOPS[toStop];
+  return {
+    trafficType: 'shuttle', froms, sectionTime: SHUTTLE_RIDE_FALLBACK_MIN,
+    startName: a.name, endName: b.name, startX: a.lng, startY: a.lat, endX: b.lng, endY: b.lat,
+  };
+}
+
+// 하교: 정문 → (셔틀) → 길음역 3번 출구 → ODsay 경로(길음역 → 집)
+function dismissalShuttlePath(tail) {
+  const stop = SHUTTLE_STOPS.kookmin;
+  const walkMin = Math.max(1, Math.round(walkSecFromDist(distM(MAIN_GATE, stop)) / 60));
+  return {
+    source: 'shuttle',
+    subPath: [{ trafficType: 3, sectionTime: walkMin }, shuttleSubPath(['kookmin', 'yongduri'], 'gireum'), ...tail.subPath],
+  };
+}
+
+// 등교: ODsay 경로 중 길음역에서 내리는 구간까지 + 길음역 3번 출구까지 도보 + 셔틀 (추가 ODsay 호출 없음)
+async function morningShuttlePaths(paths) {
+  const out = [];
+  const seen = new Set();
+  for (const { path } of paths) {
+    const i = path.subPath.findIndex((sp) => (sp.trafficType === 1 || sp.trafficType === 2) && sp.endName?.includes('길음'));
+    if (i < 0) continue;
+    const head = path.subPath.slice(0, i + 1);
+    const key = head.filter((sp) => sp.trafficType !== 3).map((sp) => `${sp.lane?.[0]?.busNo ?? sp.lane?.[0]?.name}@${sp.startName}`).join('>');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const end = { lat: Number(head[i].endY), lng: Number(head[i].endX) };
+    const w = await walkBetween(end, SHUTTLE_STOPS.gireum);
+    out.push({
+      source: 'shuttle',
+      subPath: [...head, { trafficType: 3, sectionTime: Math.max(1, Math.round(w.sec / 60)), distance: w.distanceM }, shuttleSubPath(['gireum'], 'kookmin')],
+    });
+    if (out.length >= 2) break;
+  }
+  return out;
+}
 
 // ODsay 노선 이름 → 서울 실시간 지하철 API subwayId
 const SUBWAY_IDS = { 우이신설: '1092', 경의중앙: '1063', 공항: '1065', 경춘: '1067', 수인분당: '1075', 신분당: '1077', 서해: '1093', 신림: '1094' };
@@ -382,9 +483,10 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, w
       continue;
     }
     const isFirstRide = !legs.some((l) => l.type !== 'walk');
-    const leg = sp.trafficType === 2
-      ? await busLeg(sp, t, now, isFirstRide ? firstWalkOverride?.ars : undefined, ctx)
-      : await subwayLeg(sp, t, now);
+    const leg = sp.trafficType === 'shuttle' ? shuttleLeg(sp, t, now, ctx)
+      : sp.trafficType === 2
+        ? await busLeg(sp, t, now, isFirstRide ? firstWalkOverride?.ars : undefined, ctx)
+        : await subwayLeg(sp, t, now);
     // 실시간 길안내용 좌표: 탑승·하차 정류장, 하차 직전 정류장(내릴 준비 안내), 지하철 나갈 출구
     const pos = (y, x) => (y && x ? { lat: Number(y), lng: Number(x) } : null);
     leg.fromPos = (isFirstRide && firstWalkOverride?.ars && firstWalkOverride.toPos) || pos(sp.startY, sp.startX);
@@ -394,10 +496,11 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, w
     leg.preStop = before ? { name: before.stationName, ...pos(before.y, before.x) } : null;
     if (sp.trafficType === 1 && sp.endExitNo) leg.exitNo = sp.endExitNo;
     leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
-    t += leg.waitSec + leg.extraWaitSec + sp.sectionTime * 60;
+    const rideSec = (sp.trafficType === 'shuttle' ? leg.rideMin : sp.sectionTime) * 60;
+    t += leg.waitSec + leg.extraWaitSec + rideSec;
     parts.waitSec += leg.waitSec;
     parts.extraWaitSec += leg.extraWaitSec;
-    parts.rideSec += sp.sectionTime * 60;
+    parts.rideSec += rideSec;
     leg.arriveAt = new Date(now + t * 1000).toISOString();
     legs.push(leg);
   }
@@ -538,12 +641,28 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     }
     return { ...r, tags, pathSource: path.source ?? 'odsay' };
   };
+  // 국민대 셔틀 경로 (하교: 길음역 → 집 ODsay 1회, 7일 저장 / 등교: 받은 경로에서 바꿔 끼움)
+  const shuttlePaths = [];
+  if (direction === 'home' && onCampus && shuttleSoon(['kookmin', 'yongduri'], now + startSec * 1000)) {
+    try {
+      const found = await searchPaths(SHUTTLE_STOPS.gireum, to);
+      pathSources.push({ source: found.source, at: found.at });
+      shuttlePaths.push(...found.paths.slice(0, 2).map(dismissalShuttlePath));
+    } catch {}
+  }
+  if (direction === 'school') shuttlePaths.push(...await morningShuttlePaths(paths).catch(() => []));
+  if (shuttlePaths.length) ctx.shuttle = await shuttleStatus(now).catch(() => null);
+
   const jobs = [];
+  for (const path of shuttlePaths) {
+    jobs.push((direction === 'home' ? walkFromOrigin(path, MAIN_GATE) : Promise.resolve(null)).then((w) => run(path, w, ['국민대 셔틀'])));
+  }
   for (const { path, anchor } of paths) {
     jobs.push(walkFromOrigin(path, anchor).then((w) => run(path, w, [])));
     jobs.push(upstreamVariant(path, from, nearStops).then((v) => v && run(path, v, [`${v.to}까지 걸어서 먼저 타기`])));
   }
-  const results = (await Promise.all(jobs)).filter(Boolean);
+  // 셔틀이 끊긴 시간(주말·운행 끝)의 셔틀 경로는 빼기
+  const results = (await Promise.all(jobs)).filter((r) => r && !(r.pathSource === 'shuttle' && r.unavailable));
 
   const seen = new Set();
   const unique = results.filter((r) => {
@@ -588,6 +707,9 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   }
   unique.sort((a, b) => a.score - b.score);
   const routes = unique.slice(0, 5);
+  // 셔틀이 상위에 못 들어도 비교할 수 있게 가장 나은 셔틀 경로 하나는 붙임
+  const bestShuttle = unique.find((r) => r.pathSource === 'shuttle');
+  if (bestShuttle && !routes.includes(bestShuttle)) routes.push(bestShuttle);
 
   return {
     direction, from, to, mode,
@@ -630,6 +752,7 @@ function dataSources(routes, pathSources, weather) {
   if (legs.some((l) => l.typicalBoarders != null)) out.push({ what: '버스 탑승 인원', by: `서울시 교통카드 승하차 통계 (${profile.month.slice(0, 4)}.${profile.month.slice(4)})`, at: null, note: '평일 평균' });
   if (legs.some((l) => l.type === 'walk')) out.push({ what: '도보', by: 'OpenStreetMap 보행 경로', at: null, note: '내 걸음 속도 배율 반영' });
   if (legs.some((l) => l.report)) out.push({ what: '정류장 줄', by: '학우 제보', at: null, note: '15분 안 제보만 · 보통 10%·혼잡 40%를 못 탈 확률 하한으로' });
+  if (legs.some((l) => l.type === 'shuttle')) out.push({ what: '국민대 셔틀', by: '학교 통학버스 시간표 + 학생 탑승 기록', at: null, note: '실시간 위치 없음 · 탑승 시간은 기록 3회 이상이면 중간값, 아니면 시간표 간격 15분' });
   if (weather) out.push({ what: '날씨', by: '기상청 초단기예보', at: null, note: `${weather.at} · ${weather.forTime} 예보` });
   return out;
 }
