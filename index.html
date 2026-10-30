@@ -40,7 +40,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
     
     * {
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
@@ -118,7 +118,7 @@
       transition: width 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
     }
     /* ---- 실험: 이동 앱 스타일 (ui/citymapper-style 브랜치) ---- */
-    :root { --cm-panel: #3c5a78; --cm-panel-2: #33506c; --cm-green: #2fa84f; --cm-green-d: #23883e; --cm-blue: #2f80c9; }
+    :root { --cm-panel: #405972; --cm-panel-2: #354e66; --cm-green: #2b9450; --cm-green-d: #237b42; --cm-blue: #337dbb; }
     .cm-panel { background: var(--cm-panel); }
     .cm-field { background: var(--cm-panel-2); border-radius: 12px; }
     .cm-chip { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #dbe6f1; font-size: 10px; font-weight: 700; }
@@ -145,6 +145,24 @@
     #rec-results > .p-3 { background: #fff; border-radius: 12px; }
     #rec-results > details, #rec-results > .px-3\.5 { color: #dbe6f1; }
     #rec-results > details b { color: #fff; }
+
+    /* Subtle finish; keep the original layout, sizing and color roles. */
+    #view-app { background-color: #f3f5f7; letter-spacing: -0.015em; }
+    #view-app .font-black { font-weight: 800; }
+    #view-app .font-extrabold { font-weight: 750; }
+    #view-app .text-slate-900 { color: #202b3b; }
+    #view-app .text-slate-500 { color: #687587; }
+    #view-app > div:first-child { box-shadow: none; border-bottom-color: #e7ebf0; }
+    #app-scroll-content .shadow-sm { box-shadow: 0 1px 3px rgba(25, 40, 60, 0.035); }
+    #app-scroll-content .border-slate-200\/80 { border-color: #e4e9ef; }
+    #app-scroll-content .cm-panel { box-shadow: 0 2px 7px rgba(25, 40, 60, 0.08); }
+    .cm-card { box-shadow: 0 1px 2px rgba(25, 40, 60, 0.04); }
+    .cm-min, #brief-leave { font-variant-numeric: tabular-nums; }
+    .cm-go { font-weight: 750; }
+    #view-app > nav { border-top-color: #e7ebf0; box-shadow: 0 -2px 8px rgba(25, 40, 60, 0.025); }
+    #view-app button:focus-visible, #view-app input:focus-visible, #view-app select:focus-visible {
+      outline: 2px solid #6b8caf; outline-offset: 2px;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-start p-3 sm:p-6 overflow-x-hidden">
