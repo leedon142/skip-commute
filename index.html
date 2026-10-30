@@ -37,10 +37,18 @@
   </script>
   <title>스킵 (SKIP) - 캠퍼스 통학비서 AI Agent</title>
   <!-- Tailwind CSS & Phosphor Icons CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- 외부 CDN 없이 동작: Tailwind는 미리 만든 CSS(npm run css), 아이콘·글꼴도 vendor/에 -->
+  <link rel="stylesheet" href="/vendor/tailwind.css">
+  <link rel="stylesheet" href="/vendor/phosphor/bold.css">
+  <link rel="stylesheet" href="/vendor/phosphor/fill.css">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
+    @font-face {
+      font-family: 'Pretendard';
+      font-weight: 45 920;
+      font-style: normal;
+      font-display: swap;
+      src: url('/vendor/pretendard/PretendardVariable.woff2') format('woff2-variations');
+    }
     
     * {
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
@@ -542,7 +550,7 @@
               <!-- Trigger Inspect Box -->
               <div id="class-inspect-box" class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
                 <div class="font-bold text-slate-700 mb-0.5">💡 과목을 누르면 통학 계산에 어떻게 쓰이는지 보고, 시간·강의실을 고칠 수 있어요</div>
-                <div class="text-[11px] text-slate-500">시간표와 강의동 정보는 외부 서버에 전송되지 않고 스마트폰 기기 내부(Local)에만 저장됩니다.</div>
+                <div id="tt-storage-note" class="text-[11px] text-slate-500">시간표와 강의실은 이 기기 안에만 저장하고 외부 서버로 보내지 않아요.</div>
               </div>
             </div>
           </div>
@@ -615,6 +623,15 @@
                 <div id="live-board" class="divide-y divide-slate-100 text-xs"></div>
               </div>
 
+              <!-- 국민대 셔틀 (학교 공지 시간표 + 학생 탑승 기록, /api/shuttle) -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100">
+                  <span class="text-xs font-extrabold text-slate-900 flex items-center gap-1.5"><i class="ph-bold ph-van text-slate-500"></i> 국민대 셔틀 · 국민대 → 길음역</span>
+                  <button onclick="loadShuttle()" class="text-[11px] font-bold text-blue-600 tap-press">새로고침</button>
+                </div>
+                <div id="shuttle-dismissal" class="px-3.5 py-2.5 text-xs space-y-2"></div>
+              </div>
+
             </div>
 
             <!-- ---------------- SUBMODE: MORNING (등교 스마트 가변 알람 & 3대 등교 대안) ---------------- -->
@@ -636,6 +653,15 @@
                   <span>분</span>
                   <button onclick="loadMorning()" class="ml-auto px-2.5 py-1 bg-white/15 hover:bg-white/25 rounded-lg font-bold tap-press">다시 계산</button>
                 </div>
+              </div>
+
+              <!-- 국민대 셔틀 (학교 공지 시간표 + 학생 탑승 기록, /api/shuttle) -->
+              <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100">
+                  <span class="text-xs font-extrabold text-slate-900 flex items-center gap-1.5"><i class="ph-bold ph-van text-slate-500"></i> 국민대 셔틀 · 길음역 → 국민대</span>
+                  <button onclick="loadShuttle()" class="text-[11px] font-bold text-blue-600 tap-press">새로고침</button>
+                </div>
+                <div id="shuttle-morning" class="px-3.5 py-2.5 text-xs space-y-2"></div>
               </div>
 
               <!-- 등교 경로 후보 -->
@@ -665,96 +691,31 @@
                 <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
               </div>
               <div class="grid grid-cols-3 gap-2 text-xs">
-                <button onclick="submitReport('여유 (바로 탑승 가능)')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                <button onclick="submitReport('ok')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
                   <span class="text-sm">🟢</span>
                   <span>여유</span>
                 </button>
-                <button onclick="submitReport('보통 (1대 대기 후 탑승)')" class="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                <button onclick="submitReport('mid')" class="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold flex flex-col items-center gap-0.5 tap-press">
                   <span class="text-sm">🟡</span>
                   <span>보통</span>
                 </button>
-                <button onclick="submitReport('혼잡 (만차 / 줄 매우 긺)')" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold flex flex-col items-center gap-0.5 tap-press">
+                <button onclick="submitReport('busy')" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold flex flex-col items-center gap-0.5 tap-press">
                   <span class="text-sm">🔴</span>
                   <span>혼잡</span>
                 </button>
               </div>
             </div>
 
-            <!-- Feed List -->
+            <!-- 학우 제보 피드 (/api/reports, 최근 2시간) -->
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-slate-800">학우들의 실시간 현장 피드</span>
-                <span class="text-[10px] text-slate-400">서버 공유 준비 중</span>
+                <button onclick="loadReportFeed()" class="text-[10px] text-slate-400"><span id="report-feed-updated">불러오는 중</span> · 새로고침</button>
               </div>
-              <div class="p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 font-bold">아래 흐린 글은 화면 예시예요. 실제 학우 제보가 아니고 추천에도 쓰이지 않아요.</div>
-
-              <div id="report-feed-list" class="space-y-2">
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                  <div class="flex items-center justify-between font-bold text-slate-800">
-                    <span class="flex items-center gap-1 text-rose-600">
-                      <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 정문 시내버스 171
-                    </span>
-                    <span class="text-[10px] text-slate-400 font-normal">2분 전</span>
-                  </div>
-                  <p class="text-[11px] text-slate-600 mt-1">
-                    "171번 줄 북악관 계단 근처까지 서 있습니다. 버스 탈 생각 마시고 셔틀 타세요"
-                  </p>
-                </div>
-
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                  <div class="flex items-center justify-between font-bold text-slate-800">
-                    <span class="flex items-center gap-1 text-emerald-600">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 정문 셔틀 승차장
-                    </span>
-                    <span class="text-[10px] text-slate-400 font-normal">5분 전</span>
-                  </div>
-                  <p class="text-[11px] text-slate-600 mt-1">
-                    "셔틀 줄 생각보다 빨리 줄어듭니다. 5분 기다리니 바로 탔어요!"
-                  </p>
-                </div>
-
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                  <div class="flex items-center justify-between font-bold text-slate-800">
-                    <span class="flex items-center gap-1 text-amber-600">
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> 후문 우이신설길
-                    </span>
-                    <span class="text-[10px] text-slate-400 font-normal">8분 전</span>
-                  </div>
-                  <p class="text-[11px] text-slate-600 mt-1">
-                    "비 오는데 북한산보국문역 길 사람 별로 없고 아주 쾌적합니다 추천"
-                  </p>
-                </div>
-
-                <!-- Hidden Extra Feeds -->
-                <div id="extra-feed-container" class="space-y-2 hidden">
-                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <div class="flex items-center justify-between font-bold text-slate-800">
-                      <span class="flex items-center gap-1 text-blue-600">
-                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 길음역 셔틀 승차홈
-                      </span>
-                      <span class="text-[10px] text-slate-400 font-normal">아침 제보</span>
-                    </div>
-                    <p class="text-[11px] text-slate-600 mt-1">
-                      "아침 8시 40분 길음역 셔틀 줄 30명 정도 서있네요. 배차 빨라서 금방 빠집니다"
-                    </p>
-                  </div>
-                  <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <div class="flex items-center justify-between font-bold text-slate-800">
-                      <span class="flex items-center gap-1 text-rose-600">
-                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 북악터널 진입로
-                      </span>
-                      <span class="text-[10px] text-slate-400 font-normal">15분 전</span>
-                    </div>
-                    <p class="text-[11px] text-slate-600 mt-1">
-                      "터널 빠져나오는 차선 완전히 주차장 상태입니다. 버스 진입 지연 중"
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Expand Feed Toggle Button -->
-              <button onclick="toggleFeedMore()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 tap-press">
-                <span id="btn-load-more-text">실시간 장소별 제보 더보기 (2건 추가)</span>
+              <div class="text-[10px] text-slate-500">15분 안의 제보는 그 정류장 버스의 못 탈 확률에 반영돼요 (보통 10% · 혼잡 40% 이상으로).</div>
+              <div id="report-feed-list" class="space-y-2"></div>
+              <button id="report-feed-more" onclick="toggleFeedMore()" class="hidden w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 tap-press">
+                <span id="btn-load-more-text"></span>
                 <i id="btn-load-more-icon" class="ph-bold ph-caret-down text-xs"></i>
               </button>
             </div>
@@ -826,18 +787,18 @@
                   <button onclick="disablePush()" class="flex-1 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold tap-press">알림 끄기</button>
                 </div>
               </div>
-              <div class="flex items-center justify-between">
-                <span>기상·교통 연동 스마트 가변 알람</span>
-                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
-              </div>
-              <div class="flex items-center justify-between">
-                <span>수업 종료 시 능동 하교 브리핑 푸시</span>
-                <input type="checkbox" checked class="w-4 h-4 accent-blue-600">
-              </div>
-              <div class="flex items-center justify-between">
-                <span>길안내 중 5분 넘게 늦어지면 더 빠른 경로 제안</span>
-                <input id="set-reroute" type="checkbox" checked onchange="setRerouteEnabled(this.checked)" class="w-4 h-4 accent-blue-600">
-              </div>
+              <label class="flex items-center justify-between gap-2">
+                <span>기상·교통 연동 등교 알람 푸시<span class="block text-[10px] text-slate-400">첫 수업 도착 기준 출발 시각에 알림 (날씨·실시간 도착 반영)</span></span>
+                <input id="set-morningPush" type="checkbox" onchange="setAppSetting('morningPush', this.checked)" class="w-4 h-4 accent-blue-600">
+              </label>
+              <label class="flex items-center justify-between gap-2">
+                <span>수업 종료 시 하교 브리핑 푸시<span class="block text-[10px] text-slate-400">마지막 수업 끝나기 5분 전</span></span>
+                <input id="set-dismissalPush" type="checkbox" onchange="setAppSetting('dismissalPush', this.checked)" class="w-4 h-4 accent-blue-600">
+              </label>
+              <label class="flex items-center justify-between gap-2">
+                <span>길안내 중 돌발 상황 우회 안내<span class="block text-[10px] text-slate-400">타기 전: 탈 버스가 만차·5분 이상 지연·운행 종료이거나 혼잡 제보가 있으면 다른 추천 경로 안내 · 탄 뒤: 5분 넘게 늦어지면 더 빠른 경로 제안</span></span>
+                <input id="set-reroute" type="checkbox" onchange="setAppSetting('reroute', this.checked)" class="w-4 h-4 accent-blue-600">
+              </label>
             </div>
           </div>
 
@@ -864,6 +825,8 @@
               <button onclick="acceptReroute()" class="py-1.5 rounded-lg bg-blue-600 text-white font-bold tap-press">경로 바꾸기</button>
             </div>
           </div>
+          <!-- 타기 전 돌발 상황(만차·지연·혼잡 제보) 때 대안 경로, 셔틀 탔어요·내렸어요 -->
+          <div id="nav-alert" class="hidden mt-2 p-2.5 rounded-xl bg-white text-slate-800 text-[11px] leading-snug"></div>
         </div>
 
         <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
@@ -998,7 +961,7 @@
       if (APP_MODE) {
         showSkipAppDirect();
         // ?tab=2 처럼 특정 탭으로 바로 열기 (홈 화면 바로가기용)
-        openFromUrl(location.href);
+        timetableReady.then(() => openFromUrl(location.href));
       } else {
         showLockScreen();
       }
@@ -1011,7 +974,7 @@
         });
       }
       renderPushStatus();
-      if (pushState().enabled) setTimeout(loadMorning, 1500); // 등교 알람 예약을 최신으로
+      if (pushState().enabled) timetableReady.then(() => setTimeout(loadMorning, 1500)); // 등교 알람 예약을 최신으로
     });
 
     // ================= ENHANCED DUAL-TRIGGER GESTURE ENGINE =================
@@ -1204,7 +1167,7 @@
       }
       if (tabIndex === 1) { loadHomeBriefing(); loadExitStatus(); }
       if (tabIndex === 2) renderTimetable();
-      if (tabIndex === 4) locateReportStop();
+      if (tabIndex === 4) { locateReportStop(); loadReportFeed(); }
       if (tabIndex === 3) {
         loadLiveBoard();
         if (!document.getElementById('rec-results').children.length) runRecommend();
@@ -1477,11 +1440,49 @@
       renderPushStatus('알림을 껐어요.');
     }
 
+    // 알림·안내 설정 (기본 모두 켬)
+    const SETTINGS_KEY = 'skip.settings';
+    function appSettings() {
+      let saved = {};
+      try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch {}
+      let reroute = true;
+      try { reroute = localStorage.getItem('skip.reroute') !== '0'; } catch {}
+      return { morningPush: true, dismissalPush: true, reroute, ...saved };
+    }
+    function setAppSetting(key, on) {
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...appSettings(), [key]: on })); } catch {}
+      // 알림을 끄면 이미 걸어 둔 예약도 취소
+      const kind = { morningPush: 'morning', dismissalPush: 'dismissal' }[key];
+      if (kind && !on) cancelPush(kind);
+      if (kind && on) { loadHomeBriefing(); loadMorning(); }
+      if (key === 'reroute' && !on) dismissNavAlert();
+      triggerToast(on ? '켰어요.' : '껐어요.');
+    }
+    function renderSettings() {
+      const st = appSettings();
+      for (const k of ['morningPush', 'dismissalPush', 'reroute']) {
+        const el = document.getElementById(`set-${k}`);
+        if (el) el.checked = st[k];
+      }
+    }
+
+    async function cancelPush(kind) {
+      const st = pushState();
+      const job = st.jobs?.[kind];
+      if (!job) return;
+      await pushApi({ action: 'cancel', messageId: job.id }).catch(() => {});
+      const jobs = { ...pushState().jobs };
+      delete jobs[kind];
+      savePushState({ ...pushState(), jobs });
+      renderPushStatus();
+    }
+
     // kind별로 하나만 예약. 시각이 1분 넘게 바뀌면 예전 예약을 취소하고 다시
     // 등교(prepMin 있음)는 서버가 알람 1시간 전에 다시 계산해서 비·정체면 알람을 앞당김
     async function schedulePush(kind, at, params, plannedLeaveBy, prepMin) {
       const st = pushState();
       if (!st.enabled || !at || at < Date.now() + 60_000) return;
+      if (!appSettings()[kind === 'morning' ? 'morningPush' : 'dismissalPush']) return;
       const prev = st.jobs?.[kind];
       if (prev && Math.abs(prev.at - at) < 60_000 && prev.at > Date.now()) return;
       try {
@@ -1599,6 +1600,7 @@
         if (l.congestion) live.push(l.congestion);
       }
       if (l.type === 'subway' && l.realtime && l.heading) live.push(`<b>${escapeHtml(l.heading)}</b>`);
+      if (l.report) live.push(`학우 제보 <b>${escapeHtml(l.report.label)}</b> ${l.report.count}건 (${l.report.agoMin}분 전)`);
       const next = l.nextVehicle
         ? `<div class="text-[10px] text-slate-500">놓치면 다음 차 ${Math.round(l.nextVehicle.waitSec / 60)}분 뒤${l.nextVehicle.passengers != null ? ` · 버스 안 ${l.nextVehicle.passengers}명` : ''}${l.nextVehicle.congestion ? ` · ${l.nextVehicle.congestion}` : ''}</div>`
         : '';
@@ -1712,6 +1714,7 @@
                 <span class="text-[11px] text-slate-500 flex items-center gap-1">${Math.round(r.totalSec / 60)}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}
                   <i class="route-chevron ph-bold ph-caret-down transition-transform"></i></span>
               </div>
+              ${reportLine(r)}
               ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
               <div class="flex items-center gap-1 flex-wrap">${r.legs.filter((l) => l.type !== 'walk').map((l) =>
                 `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`).join('<i class="ph-bold ph-caret-right text-slate-400 text-[10px]"></i>')}
@@ -1720,6 +1723,14 @@
             </div>
             ${renderRouteDetail(r, dest, i, morning)}
           </div>`).join('') || '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
+    }
+
+    // 첫 탈것 정류장에 15분 안 학우 제보가 있으면 근거와 함께 표시
+    function reportLine(r) {
+      const first = r.legs.find((l) => l.type !== 'walk');
+      const rep = first?.report;
+      if (!rep || rep.level === 'ok') return '';
+      return `<div class="text-[10px] font-bold ${rep.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보: 줄 ${escapeHtml(rep.label)} (${rep.agoMin}분 전) · 못 탈 확률 ${Math.round(first.missProb * 100)}% 반영</div>`;
     }
 
     function rideName(l) {
@@ -1925,12 +1936,139 @@
       document.getElementById('sb-sched').textContent = today.length ? `오늘 일정: ${today[today.length - 1].end} 하교` : '오늘 수업 없음';
     }
 
-    // 피드의 고정 문구는 예시라고 표시 (서버 저장 전)
-    function markSampleReports() {
-      for (const el of document.querySelectorAll('#report-feed-list > div, #extra-feed-container > div')) {
-        el.classList.add('opacity-60');
-        const time = el.querySelector('.text-\\[10px\\]');
-        if (time) time.textContent = '예시';
+    // ---------------- 국민대 셔틀 (학교 공지 시간표 + 학생들의 '탔어요·내렸어요' 기록) ----------------
+    // 셔틀은 실시간 위치 정보가 없음 → 탄 사람이 누른 기록으로 오늘 편이 실제로 떠났는지, 보통 몇 분 걸리는지 보여줌
+    const SHUTTLE_RIDE_KEY = 'skip.shuttleRide';
+    const SHUTTLE_CAMPUS_M = 700;
+    // 정문 국민대앞(08107), 추천 엔진의 MAIN_GATE와 같은 좌표
+    const MAIN_GATE_POS = { lat: 37.6106795513, lng: 126.9940273315 };
+    let shuttleData = null;
+
+    const nowMinKst = () => { const d = new Date(Date.now() + 9 * 3600e3); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+    const hmToMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+
+    function shuttleRide() {
+      try {
+        const r = JSON.parse(localStorage.getItem(SHUTTLE_RIDE_KEY));
+        return r && Date.now() - r.boardAt < 2 * 3600e3 ? r : null;
+      } catch { return null; }
+    }
+
+    async function fetchShuttle() {
+      const res = await fetch('/api/shuttle');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      shuttleData = data;
+      return data;
+    }
+
+    // from 정류장들에서 떠나는 편 [{ line, from, to, dep }] (시간 순)
+    function shuttleDeps(data, froms) {
+      return data.lines.flatMap((l) => l.departures.filter((d) => froms.includes(d.from))
+        .flatMap((d) => d.times.map((dep) => ({ line: l.id, lineName: l.name, from: d.from, to: d.to, dep }))))
+        .sort((a, b) => hmToMin(a.dep) - hmToMin(b.dep));
+    }
+
+    async function shuttleHomeText() {
+      try {
+        const data = shuttleData ?? await fetchShuttle();
+        if (!data.serviceDay) return '오늘은 운행 안 함 (평일만)';
+        const next = shuttleDeps(data, ['kookmin', 'yongduri']).find((d) => hmToMin(d.dep) >= nowMinKst());
+        if (!next) return '오늘 운행 끝 (심야 22:50이 마지막)';
+        const ride = data.ride[`${next.line}|${next.from}`];
+        return `<b>${next.dep}</b> ${escapeHtml(next.lineName)} · ${escapeHtml(data.stops[next.from].name)}${ride ? ` · 보통 ${ride.medianMin}분` : ''}`;
+      } catch (e) {
+        return escapeHtml(e.message);
+      }
+    }
+
+    async function loadShuttle() {
+      const boxes = { dismissal: document.getElementById('shuttle-dismissal'), morning: document.getElementById('shuttle-morning') };
+      try {
+        const data = await fetchShuttle();
+        boxes.dismissal.innerHTML = renderShuttle(data, ['kookmin', 'yongduri']);
+        boxes.morning.innerHTML = renderShuttle(data, ['gireum']);
+      } catch (e) {
+        for (const b of Object.values(boxes)) b.innerHTML = `<div class="text-rose-700">셔틀 정보를 불러오지 못했어요: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderShuttle(data, froms) {
+      const now = nowMinKst();
+      const ride = shuttleRide();
+      // 방금 떠난 편(20분 안)은 탑승 기록 확인용으로 같이, 다음 편 3개까지
+      const list = shuttleDeps(data, froms).filter((d) => hmToMin(d.dep) >= now - 20).slice(0, 4);
+      const rows = !data.serviceDay
+        ? '<div class="text-slate-500">셔틀은 평일(월~금)에만 다녀요.</div>'
+        : list.length ? list.map((d) => {
+          const t = data.trips[`${d.line}|${d.from}|${d.dep}`];
+          const r = data.ride[`${d.line}|${d.from}`];
+          const past = hmToMin(d.dep) < now;
+          return `
+            <div class="flex items-start gap-2 ${past ? 'opacity-70' : ''}">
+              <span class="font-mono font-bold text-slate-900 w-11">${d.dep}</span>
+              <div class="flex-1 min-w-0">
+                <div class="font-bold text-slate-800">${escapeHtml(d.lineName)} <span class="font-normal text-slate-500">· ${escapeHtml(data.stops[d.from].name)}</span></div>
+                <div class="text-[10px] text-slate-500">${t ? `<span class="text-emerald-700 font-bold">탑승 기록 ${t.boardings}명</span> · 마지막 ${hhmm(new Date(t.lastBoardAt).toISOString())}` : past ? '탑승 기록 없음' : '시간표 기준'}${r ? ` · 보통 ${r.medianMin}분 걸림 (기록 ${r.n}회)` : ''}</div>
+              </div>
+            </div>`;
+        }).join('') : '<div class="text-slate-500">오늘 남은 셔틀이 없어요.</div>';
+      const stopNotes = froms.map((f) => `<li>${escapeHtml(data.stops[f].detail)}</li>`).join('');
+      const action = ride
+        ? `<button onclick="shuttleAlight()" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-extrabold tap-press">내렸어요 <span class="font-normal text-xs">(${ride.dep} ${escapeHtml(ride.lineName)} 탑승 중)</span></button>`
+        : data.serviceDay ? `<button onclick="shuttleBoard(${JSON.stringify(froms).replace(/"/g, '&quot;')})" class="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-extrabold tap-press">셔틀 탔어요</button>` : '';
+      return `${rows}
+        ${action}
+        <div class="text-[10px] text-slate-400 leading-relaxed">셔틀은 실시간 위치 정보가 없어서, 탈 때 '셔틀 탔어요'·내릴 때 '내렸어요'를 누르면 다른 학생들에게 실제 출발과 걸린 시간이 보여요. 승차장 근처에서만 기록돼요.
+          <ul class="mt-0.5">${stopNotes}</ul>
+          시간표: 국민대 통학버스 안내 (평일, 방학·공휴일은 학교 공지 확인)</div>`;
+    }
+
+    // 지금 위치에서 가까운 승차장 + 기록 가능한 편 (출발 30분 전 ~ 20분 뒤)
+    async function shuttleBoard(froms) {
+      track('셔틀-탑승');
+      const data = shuttleData ?? await fetchShuttle().catch(() => null);
+      if (!data) return triggerToast('셔틀 정보를 불러오지 못했어요');
+      const pos = await getPosition();
+      if (!pos) return triggerToast('승차장 근처인지 확인하려면 위치 권한이 필요해요');
+      const near = froms.filter((f) => {
+        const st = data.stops[f];
+        if (st.campus) return metersBetween(pos, MAIN_GATE_POS) <= SHUTTLE_CAMPUS_M;
+        return metersBetween(pos, st) <= st.radiusM;
+      });
+      if (!near.length) return triggerToast('셔틀 승차장 근처에서만 탑승을 기록할 수 있어요');
+      const now = nowMinKst();
+      const { beforeMin, afterMin } = data.boardWindow;
+      const dep = shuttleDeps(data, near).find((d) => hmToMin(d.dep) >= now - afterMin && hmToMin(d.dep) <= now + beforeMin);
+      if (!dep) return triggerToast('지금 이 승차장에서 탈 수 있는 셔틀 시간이 아니에요');
+      try {
+        const res = await fetch('/api/shuttle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'board', line: dep.line, from: dep.from, dep: dep.dep }) });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error || res.statusText);
+        try { localStorage.setItem(SHUTTLE_RIDE_KEY, JSON.stringify({ id: out.record.id, line: dep.line, lineName: dep.lineName, from: dep.from, dep: dep.dep, boardAt: out.record.boardAt })); } catch {}
+        triggerToast(`${dep.dep} ${dep.lineName} 탑승을 기록했어요. 내릴 때 '내렸어요'를 눌러 주세요.`);
+        loadShuttle();
+      } catch (e) {
+        triggerToast(`기록 실패: ${e.message}`);
+      }
+    }
+
+    async function shuttleAlight() {
+      const ride = shuttleRide();
+      if (!ride) return loadShuttle();
+      try {
+        const res = await fetch('/api/shuttle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'alight', id: ride.id }) });
+        const out = await res.json();
+        if (!res.ok && res.status !== 409) throw new Error(out.error || res.statusText);
+        try { localStorage.removeItem(SHUTTLE_RIDE_KEY); } catch {}
+        track('셔틀-하차');
+        triggerToast(res.ok ? `${out.record.rideMin}분 걸렸어요. 기록해 줘서 고마워요!` : '이미 내린 기록이 있어요');
+        loadShuttle();
+      } catch (e) {
+        // 너무 빨리/늦게 누른 경우: 탑승 기록은 남기고 하차만 취소
+        try { localStorage.removeItem(SHUTTLE_RIDE_KEY); } catch {}
+        triggerToast(`하차 기록 실패: ${e.message}`);
+        loadShuttle();
       }
     }
 
@@ -1964,6 +2102,7 @@
           row('🚍 정문 국민대앞 · 길음·신설동 방면', busText(byId['main-gate-east'])),
           row('🚍 정문 국민대학교앞 · 광화문 방면', busText(byId['main-gate-west'])),
           row('🚇 후문 → 우이신설선 정릉역', subwayText(byId['back-gate-subway'])),
+          row('🚐 정문 셔틀 → 길음역', await shuttleHomeText()),
         ].join('');
         document.getElementById('exit-updated').textContent = `${hhmm(board.updatedAt)} 갱신`;
       } catch (e) {
@@ -1991,14 +2130,77 @@
       { day: 4, start: '16:30', end: '18:00', name: '선형대수', room: '미래관6층11호실' },
       { day: 5, start: '14:30', end: '16:30', name: '유레카프로젝트', room: '미래관6층11호실' },
     ];
-    let timetable = loadTimetable();
+    // 시간표는 기기 안에만 AES-GCM으로 암호화해서 저장. 열쇠는 꺼낼 수 없는(non-extractable) 키로 IndexedDB에 보관
+    // (저장소 파일을 복사해 가도 이 브라우저 밖에서는 못 읽음). 암호화를 못 쓰는 환경(http 주소 등)만 그냥 저장
+    const TT_PLAIN_KEY = 'skip.timetable';
+    const TT_ENC_KEY = 'skip.timetable.enc';
+    let timetable = [];
+    let timetableEncrypted = false;
+    const timetableReady = loadTimetable().then((list) => { timetable = list; });
 
-    function loadTimetable() {
+    function vaultKey() {
+      return new Promise((resolve, reject) => {
+        const open = indexedDB.open('skip-vault', 1);
+        open.onupgradeneeded = () => open.result.createObjectStore('keys');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const get = db.transaction('keys').objectStore('keys').get('timetable');
+          get.onerror = () => reject(get.error);
+          get.onsuccess = async () => {
+            if (get.result) return resolve(get.result);
+            try {
+              const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+              const put = db.transaction('keys', 'readwrite').objectStore('keys').put(key, 'timetable');
+              put.onsuccess = () => resolve(key);
+              put.onerror = () => reject(put.error);
+            } catch (e) { reject(e); }
+          };
+        };
+      });
+    }
+
+    const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const fromB64 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+    async function loadTimetable() {
+      let plain = null;
+      try { plain = JSON.parse(localStorage.getItem(TT_PLAIN_KEY)); } catch {}
       try {
-        const saved = JSON.parse(localStorage.getItem('skip.timetable'));
-        if (Array.isArray(saved)) return saved;
-      } catch {}
+        if (!crypto.subtle || !window.indexedDB) throw new Error('암호화 미지원');
+        const key = await vaultKey();
+        timetableEncrypted = true;
+        const enc = JSON.parse(localStorage.getItem(TT_ENC_KEY) || 'null');
+        if (enc) {
+          const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(enc.iv) }, key, fromB64(enc.data));
+          return JSON.parse(new TextDecoder().decode(data));
+        }
+        // 예전에 그냥 저장한 시간표 → 암호화해서 옮김
+        if (Array.isArray(plain)) {
+          await writeTimetable(plain);
+          return plain;
+        }
+      } catch {
+        timetableEncrypted = false;
+        if (Array.isArray(plain)) return plain;
+      }
       return [];
+    }
+
+    async function writeTimetable(list) {
+      if (timetableEncrypted) {
+        try {
+          const key = await vaultKey();
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(list)));
+          localStorage.setItem(TT_ENC_KEY, JSON.stringify({ v: 1, iv: toB64(iv), data: toB64(data) }));
+          localStorage.removeItem(TT_PLAIN_KEY);
+          return;
+        } catch {
+          timetableEncrypted = false;
+        }
+      }
+      try { localStorage.setItem(TT_PLAIN_KEY, JSON.stringify(list)); } catch {}
     }
 
     function loadSampleTimetable() {
@@ -2009,8 +2211,18 @@
       triggerToast('예시 시간표를 넣었어요. 내 시간표로 바꾸려면 사진으로 등록하거나 과목을 눌러 삭제해 주세요.');
     }
 
+    // 저장 순서가 꼬이지 않게 이어서 씀
+    let timetableWrite = Promise.resolve();
     function saveTimetable() {
-      try { localStorage.setItem('skip.timetable', JSON.stringify(timetable)); } catch {}
+      const list = timetable.map((c) => ({ ...c }));
+      timetableWrite = timetableWrite.then(() => writeTimetable(list)).then(renderStorageBadge);
+    }
+
+    function renderStorageBadge() {
+      const el = document.getElementById('tt-storage-note');
+      if (el) el.textContent = timetableEncrypted
+        ? '🔒 시간표와 강의실은 이 기기 안에만 암호화(AES-256-GCM)해서 저장하고 외부 서버로 보내지 않아요.'
+        : '시간표와 강의실은 이 기기 안에만 저장하고 외부 서버로 보내지 않아요. (이 주소에선 암호화를 쓸 수 없어 그냥 저장해요)';
     }
 
     function classesOn(day) {
@@ -2315,6 +2527,7 @@
       const btnD = document.getElementById('btn-sub-dismissal');
       const btnM = document.getElementById('btn-sub-morning');
 
+      loadShuttle();
       if (mode === 'morning') {
         loadMorning();
         morningBox.classList.remove('hidden');
@@ -2464,7 +2677,11 @@
       return reportStop;
     }
 
-    async function submitReport(statusText) {
+    const REPORT_LEVELS = { ok: '여유', mid: '보통', busy: '혼잡' };
+    const REPORT_COLOR = { ok: 'emerald', mid: 'amber', busy: 'rose' };
+    const FEED_SHOWN = 3; // 처음 보이는 정류장 수, 나머지는 더보기
+
+    async function submitReport(level) {
       track('정류장제보');
       const stop = await locateReportStop();
       if (!stop) return triggerToast('정류장 근처에서만 제보할 수 있어요');
@@ -2472,42 +2689,81 @@
       try { last = JSON.parse(localStorage.getItem('skip.lastReport')) || {}; } catch {}
       const left = REPORT_COOLDOWN_MS - (Date.now() - (last[stop.ars] || 0));
       if (left > 0) return triggerToast(`같은 정류장은 ${Math.ceil(left / 60000)}분 뒤에 다시 제보할 수 있어요`);
-      last[stop.ars] = Date.now();
-      try { localStorage.setItem('skip.lastReport', JSON.stringify(last)); } catch {}
+      try {
+        const res = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ars: stop.ars, name: stop.name, level }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        last[stop.ars] = Date.now();
+        try { localStorage.setItem('skip.lastReport', JSON.stringify(last)); } catch {}
+        try { sessionStorage.clear(); } catch {} // 다음 추천에 바로 반영
+        triggerToast(`${stop.name} '${REPORT_LEVELS[level]}' 제보를 공유했어요. 15분 동안 이 정류장 추천에 반영돼요.`);
+        loadReportFeed(data.report.id);
+      } catch (e) {
+        triggerToast(`제보 실패: ${e.message}`);
+      }
+    }
 
-      const list = document.getElementById('report-feed-list');
-      const newReport = document.createElement('div');
-      newReport.className = 'p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs';
-      newReport.innerHTML = `
-        <div class="flex items-center justify-between font-bold text-slate-800">
-          <span class="flex items-center gap-1 text-blue-600">
-            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> ${escapeHtml(stop.name)}
-          </span>
-          <span class="text-[10px] text-blue-600 font-semibold">방금 전 (내 제보)</span>
-        </div>
-        <p class="text-[11px] text-slate-700 mt-1">
-          현장 상태: "${escapeHtml(statusText)}" 제보가 성공적으로 등록되었습니다.
-        </p>
-      `;
-      list.prepend(newReport);
-      triggerToast('제보를 기록했어요 (+10 P). 지금은 이 기기에만 보이고, 학우 공유는 준비 중이에요.');
+    // 정류장별로 묶어서 최근 제보 순. 정류장을 누르면 그 정류장 제보 전체가 펼쳐짐
+    async function loadReportFeed(mineId) {
+      const box = document.getElementById('report-feed-list');
+      const stamp = document.getElementById('report-feed-updated');
+      try {
+        const res = await fetch('/api/reports');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        if (mineId) {
+          try { localStorage.setItem('skip.myReports', JSON.stringify([mineId, ...myReportIds()].slice(0, 30))); } catch {}
+        }
+        const mine = new Set(myReportIds());
+        const groups = new Map();
+        for (const r of data.reports) {
+          if (!groups.has(r.ars)) groups.set(r.ars, []);
+          groups.get(r.ars).push(r);
+        }
+        const ago = (at) => {
+          const m = Math.round((Date.now() - at) / 60000);
+          return m < 1 ? '방금 전' : `${m}분 전`;
+        };
+        const fresh = (r) => Date.now() - r.at < 15 * 60000;
+        box.innerHTML = groups.size ? [...groups.values()].map((list, i) => {
+          const top = list[0];
+          const c = REPORT_COLOR[top.level];
+          const counts = Object.keys(REPORT_LEVELS).map((k) => [k, list.filter((r) => r.level === k).length]).filter(([, n]) => n);
+          return `
+            <details class="feed-group ${i >= FEED_SHOWN && !isFeedExpanded ? 'hidden' : ''} p-2.5 rounded-xl ${mine.has(top.id) ? 'bg-blue-50/80 border-blue-200' : 'bg-slate-50 border-slate-100'} border text-xs">
+              <summary class="cursor-pointer list-none">
+                <div class="flex items-center justify-between font-bold text-slate-800">
+                  <span class="flex items-center gap-1 text-${c}-700"><span class="w-1.5 h-1.5 rounded-full bg-${c}-500"></span> ${escapeHtml(top.name)}</span>
+                  <span class="text-[10px] font-normal ${mine.has(top.id) ? 'text-blue-600 font-semibold' : 'text-slate-400'}">${ago(top.at)}${mine.has(top.id) ? ' (내 제보)' : ''}</span>
+                </div>
+                <div class="mt-1 text-[11px] text-slate-600">지금 <b class="text-${c}-700">${REPORT_LEVELS[top.level]}</b> · 2시간 동안 ${counts.map(([k, n]) => `${REPORT_LEVELS[k]} ${n}`).join(' · ')}${fresh(top) && top.level !== 'ok' ? ' · <span class="text-blue-600">추천 반영 중</span>' : ''}</div>
+              </summary>
+              <ul class="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
+                ${list.map((r) => `<li>${ago(r.at)} · <span class="text-${REPORT_COLOR[r.level]}-700 font-bold">${REPORT_LEVELS[r.level]}</span>${mine.has(r.id) ? ' (내 제보)' : ''}</li>`).join('')}
+              </ul>
+            </details>`;
+        }).join('') : '<div class="p-2.5 text-[11px] text-slate-500">최근 2시간 동안 제보가 없어요. 정류장에서 첫 제보를 남겨 주세요.</div>';
+        const more = document.getElementById('report-feed-more');
+        more.classList.toggle('hidden', groups.size <= FEED_SHOWN);
+        document.getElementById('btn-load-more-text').innerText = isFeedExpanded ? '접기' : `다른 정류장 제보 더보기 (${groups.size - FEED_SHOWN}곳)`;
+        stamp.textContent = `${new Date(data.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 기준`;
+      } catch (e) {
+        box.innerHTML = `<div class="p-2.5 text-[11px] text-rose-700">제보를 불러오지 못했어요: ${escapeHtml(e.message)}</div>`;
+        stamp.textContent = '실패';
+      }
+    }
+
+    function myReportIds() {
+      try { return JSON.parse(localStorage.getItem('skip.myReports')) || []; } catch { return []; }
     }
 
     function toggleFeedMore() {
-      const extra = document.getElementById('extra-feed-container');
-      const text = document.getElementById('btn-load-more-text');
-      const icon = document.getElementById('btn-load-more-icon');
       isFeedExpanded = !isFeedExpanded;
-
-      if (isFeedExpanded) {
-        extra.classList.remove('hidden');
-        text.innerText = '실시간 제보 접기';
-        icon.classList.replace('ph-caret-down', 'ph-caret-up');
-      } else {
-        extra.classList.add('hidden');
-        text.innerText = '실시간 장소별 제보 더보기 (2건 추가)';
-        icon.classList.replace('ph-caret-up', 'ph-caret-down');
-      }
+      document.querySelectorAll('#report-feed-list .feed-group').forEach((el, i) => el.classList.toggle('hidden', i >= FEED_SHOWN && !isFeedExpanded));
+      const n = document.querySelectorAll('#report-feed-list .feed-group').length;
+      document.getElementById('btn-load-more-text').innerText = isFeedExpanded ? '접기' : `다른 정류장 제보 더보기 (${n - FEED_SHOWN}곳)`;
+      const icon = document.getElementById('btn-load-more-icon');
+      icon.classList.replace(isFeedExpanded ? 'ph-caret-down' : 'ph-caret-up', isFeedExpanded ? 'ph-caret-up' : 'ph-caret-down');
     }
 
     // University Modal
@@ -2845,18 +3101,24 @@
         const vehicle = l.type === 'bus' ? `${l.route}번 버스` : `${rideName(l)}${l.way ? ` ${l.way} 방면` : ''}`;
         const subway = l.type === 'subway';
         const arrive = Date.parse(l.arriveAt);
+        // 버스: 타기 전까지 만차·지연을 지켜봄 (stopAt = 정류장에 도착할 예정 시각)
+        const bus = l.type === 'bus' && l.ars
+          ? { ars: l.ars, route: l.route, from: l.from, departAt: Date.parse(l.departAt), stopAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000 }
+          : null;
+        // 앞 구간에서 내릴 준비할 때 갈아탈 버스 도착을 같이 알려줌
+        if (prev && bus) steps[steps.length - 1].nextBus = bus;
         steps.push({
           label: `${from}까지 걷기`,
           say: prev
             ? `${getOff(prev)} ${from}까지 걸어서 갈아타세요${walkMin ? `, 약 ${walkMin}분` : ''}.`
             : `길안내를 시작할게요. ${from}까지 걸어가세요${walkMin ? `. 약 ${walkMin}분 걸려요` : ''}.`,
-          target: l.fromPos, radius: subway ? 60 : 30,
+          target: l.fromPos, radius: subway ? 60 : 30, watch: bus,
           planAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000,
         });
         steps.push({
           label: `${vehicle} 타기`,
           say: `${from}에 도착했어요. ${withEul(vehicle)} 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
-          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway,
+          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway, watch: bus,
           planAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3),
           bus: !subway && l.vehId && l.endArs ? { vehId: l.vehId, endArs: l.endArs, route: l.route, arrive } : null,
           // 지하철: 역에 실제 도착한 시각 기준으로 실시간 열차를 다시 찾아 이후 시각을 맞춤
@@ -2890,6 +3152,7 @@
       const nav = {
         steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now(),
         plannedArrive: Date.parse(r.arriveAt), destPos: dest.lat ? { lat: dest.lat, lng: dest.lng } : null, rerouteUsed: false,
+        alts: navAlternatives(r, morning ? lastMorningRoutes : lastRoutes),
       };
       saveNav(nav);
       // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
@@ -2908,7 +3171,9 @@
       navWatchId = null;
       // 3시간 넘은 안내는 정리
       if (!nav || Date.now() - nav.startedAt > 3 * 3600e3) {
+        clearInterval(navBusTimer);
         saveNav(null);
+        renderNavAlert(null);
         bar.classList.add('hidden');
         document.body.classList.remove('nav-on');
         navWakeLock?.release?.().catch(() => {});
@@ -2938,6 +3203,10 @@
           document.getElementById('nav-dist').textContent = 'GPS 안 잡힘 · 예상 시각으로 안내';
         }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
       }
+      clearInterval(navBusTimer);
+      navBusTimer = setInterval(watchBus, 60000);
+      watchBus();
+      renderNavAlert(nav);
       // 지하·GPS 끊김 대비: 예상 시각이 지나면 다음 단계로
       navTimer = setInterval(() => {
         const cur = navState();
@@ -2951,12 +3220,7 @@
       navBusTimer = setInterval(checkBusDelay, NAV_BUS_CHECK_MS);
     }
 
-    function rerouteEnabled() {
-      try { return localStorage.getItem('skip.reroute') !== '0'; } catch { return true; }
-    }
-    function setRerouteEnabled(on) {
-      try { localStorage.setItem('skip.reroute', on ? '1' : '0'); } catch {}
-    }
+    const rerouteEnabled = () => appSettings().reroute;
 
     // 버스 타는 중: 내릴 정류장의 같은 차 도착 예정으로 얼마나 늦는지 확인
     async function checkBusDelay() {
@@ -3050,9 +3314,136 @@
       saveNav(nav);
       const step = nav.steps[nav.idx];
       if (step.subway) retimeSubway(nav.idx);
+      else if (step.nextBus) briefTransfer(nav.idx);
       else speak(step.say);
+      if (step.watch) watchBus();
       renderNavBar(nav, null);
       if (manual) document.getElementById('nav-dist').textContent = '위치 확인 중';
+    }
+
+    // ---------------- 이동 중 돌발 상황 → 대안 경로 (만차·지연·운행 종료·학우 혼잡 제보) ----------------
+    // 대안은 길안내를 시작할 때 함께 받은 다른 추천 경로 (새 길찾기 호출 없음). 버스 도착은 1분마다 실시간 확인
+    const NAV_DELAY_ALERT_MS = 5 * 60e3;
+    let navBusTimer = null;
+
+    function firstRideLabel(r) {
+      const f = r.legs.find((l) => l.type !== 'walk');
+      return f ? `${f.from} ${rideName(f)}` : '도보';
+    }
+
+    // 지금 경로와 첫 탑승(노선·정류장)이 다른 경로들 (같은 첫 탑승은 빠른 것 하나만)
+    function navAlternatives(r, routes) {
+      const key = (x) => { const f = x.legs.find((l) => l.type !== 'walk'); return f ? `${f.type}|${f.route || f.line}|${f.from}` : 'walk'; };
+      const seen = new Set([key(r)]);
+      return routes.filter((x) => !x.unavailable && !seen.has(key(x)) && seen.add(key(x))).slice(0, 4)
+        .map((x) => {
+          const f = x.legs.find((l) => l.type !== 'walk');
+          return { label: firstRideLabel(x), arriveAt: x.arriveAt, ars: f?.ars ?? null, ride: f ? rideName(f) : null, route: x };
+        });
+    }
+
+    // 문제에 맞는 대안: 줄이 긴 정류장이면 다른 정류장에서, 버스 문제면 다른 노선으로 (최대 2개)
+    function altsFor(nav, bus, kind) {
+      return (nav.alts || []).filter((a) => (kind === 'busy' ? a.ars !== bus.ars : a.ride !== `${bus.route}번`)).slice(0, 2);
+    }
+
+    async function busArrivals(ars, route) {
+      const st = await fetch(`/api/bus?ars=${encodeURIComponent(ars)}`).then((res) => res.json());
+      const age = Math.max(0, (Date.now() - Date.parse(st.fetchedAt)) / 1000) || 0;
+      const r = (st.routes || []).find((x) => x.route === route);
+      return {
+        arrivals: (r?.arrivals || []).map((a) => ({ ...a, seconds: a.seconds == null ? null : a.seconds - age })),
+        message: r?.arrivals?.[0]?.message || '',
+      };
+    }
+
+    // 정류장에 도착할 시각 이후 첫 차 → 문제가 있으면 { kind, text }
+    async function busProblem(bus) {
+      const reachAt = Math.max(Date.now(), bus.stopAt);
+      const { arrivals, message } = await busArrivals(bus.ars, bus.route).catch(() => ({ arrivals: [], message: '' }));
+      const next = arrivals.find((a) => a.seconds != null && Date.now() + a.seconds * 1000 >= reachAt);
+      if (!next && /운행종료/.test(message)) return { kind: 'ended', text: `${bus.route}번이 운행을 마쳤어요` };
+      if (next?.full) return { kind: 'full', text: `${bus.route}번이 만차예요` };
+      const boardAt = next ? Date.now() + next.seconds * 1000 : null;
+      if (next && boardAt - bus.departAt >= NAV_DELAY_ALERT_MS) {
+        return { kind: 'late', text: `${bus.route}번이 예정보다 ${Math.round((boardAt - bus.departAt) / 60e3)}분 늦게 와요 (${hhmm(new Date(boardAt).toISOString())} 도착)` };
+      }
+      const rep = await fetch('/api/reports').then((res) => res.json()).catch(() => ({}));
+      const busy = (rep.reports || []).find((x) => x.ars === bus.ars && x.level === 'busy' && Date.now() - x.at < 15 * 60e3);
+      if (busy) return { kind: 'busy', text: `${bus.from} 줄이 길다는 학우 제보가 있어요 (${Math.round((Date.now() - busy.at) / 60e3)}분 전)` };
+      return null;
+    }
+
+    async function watchBus() {
+      const nav = navState();
+      const step = nav?.steps[nav.idx];
+      const bus = step?.watch;
+      // 버스를 탈 시각이 지나면 그만 봄
+      if (!bus || !appSettings().reroute || Date.now() > bus.departAt + 3 * 60e3) return;
+      let problem = null;
+      try { problem = await busProblem(bus); } catch { return; }
+      const cur = navState();
+      if (!cur || cur.idx !== nav.idx || !problem) return;
+      const seen = `${nav.idx}:${problem.kind}`;
+      if (cur.alerted?.includes(seen)) return;
+      cur.alerted = [...(cur.alerted || []), seen];
+      const alts = altsFor(cur, bus, problem.kind);
+      cur.alert = { text: problem.text, at: Date.now(), alts };
+      saveNav(cur);
+      const alt = alts[0];
+      speak(`${problem.text}. ${alt ? `대안은 ${alt.label}, ${hhmm(alt.arriveAt)} 도착 예정이에요. 바꾸려면 화면의 대안 버튼을 누르세요.` : '다른 추천 경로가 없어서 이 버스를 기다리는 게 좋아요.'}`);
+      renderNavAlert(cur);
+    }
+
+    function renderNavAlert(nav) {
+      const box = document.getElementById('nav-alert');
+      if (!nav?.alert || Date.now() - nav.alert.at > 20 * 60e3) return box.classList.add('hidden');
+      box.classList.remove('hidden');
+      box.innerHTML = `<div class="font-extrabold text-rose-700">⚠ ${escapeHtml(nav.alert.text)}</div>
+        ${(nav.alert.alts || []).map((a, k) => `<button onclick="switchNavRoute(${k})" class="mt-1 w-full text-left px-2 py-1.5 border border-slate-200 font-bold tap-press">대안 ${k + 1}: ${escapeHtml(a.label)} · ${hhmm(a.arriveAt)} 도착 예정 <span class="font-normal text-slate-500">(추천 당시 기준)</span></button>`).join('') || '<div class="mt-0.5 text-slate-500">다른 추천 경로가 없어요.</div>'}
+        <button onclick="dismissNavAlert()" class="mt-1 text-slate-500 underline">이 경로 그대로 가기</button>`;
+    }
+
+    function dismissNavAlert() {
+      const nav = navState();
+      if (!nav) return;
+      delete nav.alert;
+      saveNav(nav);
+      renderNavAlert(nav);
+    }
+
+    function switchNavRoute(k) {
+      const nav = navState();
+      const alt = nav?.alert?.alts?.[k];
+      if (!alt) return;
+      track('길안내-대안');
+      const dest = nav.destPos || { name: nav.dest };
+      const next = {
+        steps: buildNavSteps(alt.route, dest), idx: 0, dest: nav.dest, startedAt: Date.now(), destPos: dest,
+        alts: (nav.alts || []).filter((a) => a.label !== alt.label),
+      };
+      saveNav(next);
+      speak(`경로를 바꿨어요. ${next.steps[0].say}`);
+      resumeNavigation();
+    }
+
+    // 내릴 준비 안내에 갈아탈 버스의 지금 도착 정보를 붙임
+    async function briefTransfer(idx) {
+      const nav = navState();
+      const step = nav?.steps[idx];
+      let extra = '';
+      try {
+        const nb = step.nextBus;
+        const { arrivals } = await busArrivals(nb.ars, nb.route);
+        const reachAt = Math.max(Date.now(), nb.stopAt);
+        const next = arrivals.find((a) => a.seconds != null && Date.now() + a.seconds * 1000 >= reachAt);
+        if (next) {
+          extra = ` 갈아탈 ${nb.route}번은 ${hhmm(new Date(Date.now() + next.seconds * 1000).toISOString())}에 ${nb.from}에 와요${next.full ? ', 지금 만차예요' : next.congestion ? `, ${next.congestion}` : ''}.`;
+          const alt = next.full ? altsFor(nav, nb, 'full')[0] : null;
+          if (alt) extra += ` 대안은 ${alt.label}이에요.`;
+        }
+      } catch {}
+      speak(step.say + extra);
     }
 
     // 실시간 도착 정보에서 같은 노선·방향 열차 (서버가 받아온 뒤 지난 시간만큼 빼서 지금 기준 초)
@@ -3116,6 +3507,7 @@
 
     function stopNavigation() {
       clearInterval(navTrainTimer);
+      clearInterval(navBusTimer);
       saveNav(null);
       speechSynthesis?.cancel?.();
       resumeNavigation();
@@ -3153,16 +3545,18 @@
       }, 2500);
     }
 
-    document.getElementById('set-reroute').checked = rerouteEnabled();
+    renderSettings();
     renderHomeName();
     renderWalkPace();
     showWalkTripBar();
     resumeNavigation();
-    renderTimetable();
-    fillDemoClock();
-    markSampleReports();
-    loadHomeBriefing();
     loadExitStatus();
+    timetableReady.then(() => {
+      renderStorageBadge();
+      renderTimetable();
+      fillDemoClock();
+      loadHomeBriefing();
+    });
   </script>
 </body>
 </html>
