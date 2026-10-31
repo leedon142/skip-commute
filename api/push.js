@@ -1,16 +1,12 @@
 // 웹 푸시 알림
 // GET  /api/push                          → { publicKey, canSchedule }  구독할 때 쓰는 공개키, 예약 가능 여부
 // POST /api/push { action: 'test', subscription }             → 지금 바로 테스트 알림
-// POST /api/push { action: 'schedule', subscription, kind, at, query, plannedLeaveBy?, prepMin?, cancel? }
+// POST /api/push { action: 'schedule', subscription, kind, at, query, plannedLeaveBy?, cancel? }
 //        kind: 'dismissal'(하교 브리핑) | 'morning'(등교 알람), at: 보낼 시각(epoch ms)
-//        query: /api/recommend 쿼리 문자열. 보낼 때 이 조건으로 실시간 재계산 → { messageId, checkId? }
-//        등교 알람(prepMin 있음)은 알람 1시간 전에 한 번 더 계산해서, 비·정체로 더 일찍 나가야 하면 알람을 앞당김 (checkId)
-//        cancel: 예전 예약 id 하나 또는 배열
+//        query: /api/recommend 쿼리 문자열. 보낼 때 이 조건으로 실시간 재계산 → { messageId }
 // POST /api/push { action: 'cancel', messageId }              → 예약 취소
 import { json, HttpError } from './_lib.js';
 import { publicKey, canSchedule, checkSubscription, sendPush, schedule, cancel } from './_push.js';
-
-const RECHECK_BEFORE_MS = 60 * 60_000; // 등교 알람 몇 분 전에 다시 계산할지
 
 export async function GET() {
   try {
@@ -44,19 +40,12 @@ export async function POST(request) {
       if (!new URLSearchParams(query).get('home') && !new URLSearchParams(query).get('homeLat')) {
         throw new HttpError(400, '집이 등록돼야 알림을 예약할 수 있어요');
       }
-      await Promise.all([body.cancel].flat().map(cancel));
-      const plannedLeaveBy = Number(body.plannedLeaveBy) || null;
-      const messageId = await schedule(`${origin}/api/push-send`, { subscription, kind, at, query, plannedLeaveBy }, at);
-      // 등교: 알람 1시간 전 재확인 (알람까지 70분 넘게 남았을 때만)
-      const prepMin = Number(body.prepMin);
-      let checkId = null;
-      if (kind === 'morning' && prepMin >= 0 && prepMin <= 180 && at - Date.now() > RECHECK_BEFORE_MS + 10 * 60_000) {
-        const checkAt = at - RECHECK_BEFORE_MS;
-        checkId = await schedule(`${origin}/api/push-send`, {
-          subscription, kind: 'morning-check', at: checkAt, query, plannedLeaveBy, plannedAlarmAt: at, prepMin, morningId: messageId,
-        }, checkAt);
-      }
-      return json({ messageId, checkId, at });
+      await cancel(body.cancel);
+      const messageId = await schedule(`${origin}/api/push-send`, {
+        subscription, kind, at, query,
+        plannedLeaveBy: Number(body.plannedLeaveBy) || null,
+      }, at);
+      return json({ messageId, at });
     }
     if (body.action === 'cancel') {
       await cancel(body.messageId);

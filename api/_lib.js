@@ -18,11 +18,6 @@ export async function fetchJson(url) {
 }
 
 // { data, at }: at = 실제로 받아온 시각 (캐시에서 꺼내도 원래 시각). 같은 주소를 동시에 부르면 한 번만 호출
-// 저장해 둔 응답을 버림 (한도 초과 같은 일시 오류를 20초 동안 계속 보여주지 않게)
-export function forgetCached(url) {
-  cache.delete(url);
-}
-
 export function fetchJsonAt(url) {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.promise;

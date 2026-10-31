@@ -1,25 +1,21 @@
 // POST /api/push-send — QStash가 예약 시각에 부름. 실시간으로 다시 계산해서 알림을 보냄
 // 계산이 실패해도 알림은 보냄 (눌러서 앱에서 다시 계산)
-// kind 'morning-check' = 등교 알람 1시간 전 재확인: 더 일찍 나가야 하면 알람 예약을 앞당김 (알림은 안 보냄)
 import { json } from './_lib.js';
-import { verifyQStash, sendPush, schedule, cancel } from './_push.js';
+import { verifyQStash, sendPush } from './_push.js';
 import { recommendFromQuery } from './recommend.js';
-
-const ADVANCE_MIN_MS = 3 * 60_000; // 이만큼 이상 당겨져야 알람을 옮김 (자잘한 변동은 무시)
 
 const hhmm = (iso) => new Intl.DateTimeFormat('ko-KR', {
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Seoul',
 }).format(new Date(iso));
 const rideName = (l) => (l.type === 'bus' ? `${l.route}번` : String(l.line || '').replace('수도권 ', ''));
 
-// data: 이미 계산한 추천 (재확인에서 바로 보낼 때 다시 계산하지 않으려고)
-export async function buildMessage(job, data) {
+export async function buildMessage(job) {
   const morning = job.kind === 'morning';
   const url = `/?app=1&tab=3&mode=${morning ? 'morning' : 'dismissal'}&from=push`;
   const tag = `skip-${job.kind}`;
   try {
-    data ??= await recommendFromQuery(new URLSearchParams(job.query));
-    const top = bestRoute(data);
+    const data = await recommendFromQuery(new URLSearchParams(job.query));
+    const top = data.routes.find((r) => !r.unavailable) ?? data.routes[0];
     if (!top) throw new Error('경로 없음');
     const first = top.legs.find((l) => l.type !== 'walk');
     const total = Math.round(top.totalSec / 60);
@@ -48,28 +44,6 @@ export async function buildMessage(job, data) {
   }
 }
 
-const bestRoute = (data) => data.routes.find((r) => !r.unavailable) ?? data.routes[0];
-
-// 등교 알람 1시간 전: 지금 날씨·교통으로 다시 계산 → 알람 시각이 3분 넘게 당겨지면 예약을 옮김
-// (늦춰지는 쪽은 그대로 둠: 지각 방지가 목적이라 일찍 깨우는 쪽만)
-// compute: 테스트에서 추천 계산을 바꿔 끼울 때만 씀
-export async function recheckMorning(job, origin, now = Date.now(), compute = recommendFromQuery) {
-  const data = await compute(new URLSearchParams(job.query));
-  const top = bestRoute(data);
-  if (!top?.leaveBy) return { moved: false };
-  const newAlarm = Date.parse(top.leaveBy) - job.prepMin * 60_000;
-  if (newAlarm > job.plannedAlarmAt - ADVANCE_MIN_MS) return { moved: false, newAlarm };
-  await cancel(job.morningId);
-  const alarm = { subscription: job.subscription, kind: 'morning', at: newAlarm, query: job.query, plannedLeaveBy: job.plannedLeaveBy };
-  // 새 알람 시각이 이미 지났거나 곧이면 지금 바로 보냄
-  if (newAlarm <= now + 60_000) {
-    await sendPush(job.subscription, await buildMessage(alarm, data), origin);
-    return { moved: true, sentNow: true, newAlarm };
-  }
-  const messageId = await schedule(`${origin}/api/push-send`, alarm, newAlarm);
-  return { moved: true, newAlarm, messageId };
-}
-
 export async function POST(request) {
   const raw = await request.text();
   try {
@@ -79,9 +53,7 @@ export async function POST(request) {
   }
   try {
     const job = JSON.parse(raw);
-    const origin = new URL(request.url).origin;
-    if (job.kind === 'morning-check') return json(await recheckMorning(job, origin));
-    const r = await sendPush(job.subscription, await buildMessage(job), origin);
+    const r = await sendPush(job.subscription, await buildMessage(job), new URL(request.url).origin);
     // 구독 만료는 재시도해도 소용없으니 성공으로 응답
     return json(r);
   } catch (e) {

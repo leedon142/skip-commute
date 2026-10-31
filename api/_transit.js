@@ -1,6 +1,6 @@
 // 서울시 버스·지하철 실시간 API 호출과 응답 정리
 import { getCache } from '@vercel/functions';
-import { fetchJsonAt, forgetCached, requireEnv, serviceKey, HttpError } from './_lib.js';
+import { fetchJsonAt, requireEnv, serviceKey, HttpError } from './_lib.js';
 
 const BUS_BASE = 'http://ws.bus.go.kr/api/rest';
 const SUBWAY_BASE = 'http://swopenapi.seoul.go.kr/api/subway';
@@ -11,32 +11,13 @@ const CONGESTION = { 0: null, 3: '여유', 4: '보통', 5: '혼잡', 6: '매우�
 async function busApi(path, params, withTime = false) {
   const key = serviceKey(requireEnv('SEOUL_BUS_KEY'));
   const qs = new URLSearchParams({ ...params, resultType: 'json' });
-  const url = `${BUS_BASE}/${path}?serviceKey=${key}&${qs}`;
-  let { data, at } = await fetchJsonAt(url);
-  // 요청이 몰리면(초당 한도) 401 + '요청제한 횟수 초과'가 옴 → 잠깐 뒤 한 번만 다시
-  if (isLimited(data)) {
-    forgetCached(url);
-    await new Promise((r) => setTimeout(r, 800));
-    ({ data, at } = await fetchJsonAt(url));
-  }
-  // 키 오류·한도 초과는 msgHeader 없이 { error, message }로 옴 → '운행 정보 없음'으로 보이지 않게 오류로
-  if (data.error || !data.msgHeader) {
-    forgetCached(url);
-    const msg = String(data.message || data.error || '알 수 없는 응답');
-    throw new HttpError(isLimited(data) ? 429 : 502, isLimited(data)
-      ? '서울시 버스 API 호출 한도에 걸렸어요. 잠시 뒤 새로고침해 주세요.'
-      : `버스 API 오류: ${msg.slice(0, 100)}`);
-  }
+  const { data, at } = await fetchJsonAt(`${BUS_BASE}/${path}?serviceKey=${key}&${qs}`);
   const header = data.msgHeader;
   if (header && header.headerCd !== '0' && header.headerCd !== '4') {
     throw new HttpError(502, `버스 API 오류 ${header.headerCd}: ${header.headerMsg}`);
   }
   const items = data.msgBody?.itemList ?? [];
   return withTime ? { items, at } : items;
-}
-
-function isLimited(data) {
-  return /횟수 초과/.test(String(data?.message || ''));
 }
 
 // "3분12초후[2번째 전]" → 192초
@@ -62,8 +43,6 @@ function busArrival(it, n) {
     full: it[`isFullFlag${n}`] === '1',
     last: it[`isLast${n}`] === '1',
     stopsAway: Number(msg?.match(/\[(\d+)번째 전\]/)?.[1]) || null,
-    // 같은 차를 다른 정류장에서 찾을 때 씀 (탑승 → 하차 실시간 소요)
-    vehId: it[`vehId${n}`] || null,
   };
 }
 
@@ -99,16 +78,6 @@ export async function busStopsNear(lat, lng, radius) {
   }));
 }
 
-// barvlDt는 서울시가 값을 받은 시각(recptnDt) 기준 남은 초라서, 받아온 시각까지 흐른 만큼 빼야 지금 기준이 됨
-// 이미 도착했을 시간이면 오래된 값이라 쓰지 않음 (recptnDt 형식 'YYYY-MM-DD HH:mm:ss', 한국 시각)
-function liveSeconds(barvlDt, recptnDt, fetchedAtMs) {
-  const sec = Number(barvlDt);
-  if (!(sec > 0)) return null;
-  const recvAt = Date.parse(`${String(recptnDt ?? '').replace(' ', 'T')}+09:00`);
-  const age = Number.isFinite(recvAt) ? Math.max(0, (fetchedAtMs - recvAt) / 1000) : 0;
-  return sec - age > 0 ? Math.round(sec - age) : null;
-}
-
 export async function subwayStation(name) {
   const key = requireEnv('SEOUL_SUBWAY_KEY');
   const { data, at } = await fetchJsonAt(
@@ -126,7 +95,7 @@ export async function subwayStation(name) {
       heading: t.trainLineNm,
       // 열차 번호: 길안내에서 탄 열차가 내릴 역에 언제 오는지 추적
       trainNo: t.btrainNo || null,
-      seconds: liveSeconds(t.barvlDt, t.recptnDt, at),
+      seconds: Number(t.barvlDt) > 0 ? Number(t.barvlDt) : null,
       message: t.arvlMsg2,
       position: t.arvlMsg3,
       express: t.btrainSttus === '급행',

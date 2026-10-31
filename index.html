@@ -125,6 +125,52 @@
       border-radius: 100px;
       transition: width 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
     }
+    /* ---- 실험: 이동 앱 스타일 (ui/citymapper-style 브랜치) ---- */
+    :root { --cm-panel: #405972; --cm-panel-2: #354e66; --cm-green: #2b9450; --cm-green-d: #237b42; --cm-blue: #337dbb; }
+    .cm-panel { background: var(--cm-panel); }
+    .cm-field { background: var(--cm-panel-2); border-radius: 12px; }
+    .cm-chip { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #dbe6f1; font-size: 10px; font-weight: 700; }
+    .cm-chip .cm-dot { width: 40px; height: 40px; border-radius: 9999px; display: grid; place-items: center; background: var(--cm-panel-2); font-size: 18px; color: #fff; }
+    .cm-chip.cm-active .cm-dot { background: #fff; color: var(--cm-panel); }
+    .cm-chip.cm-active { color: #fff; }
+    .cm-dest { padding: 3px 9px; border-radius: 9999px; font-weight: 800; background: var(--cm-panel-2); color: #dbe6f1; }
+    .cm-dest.cm-active { background: #fff; color: var(--cm-panel); }
+    .cm-card { background: #fff; border-radius: 12px; }
+    .cm-min { font-size: 26px; line-height: 1; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
+    .cm-arrive { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #e3eefa; color: var(--cm-blue); font-size: 10px; font-weight: 800; }
+    .cm-go { background: var(--cm-green); color: #fff; border-radius: 9999px; font-weight: 900; }
+    .cm-go:hover { background: var(--cm-green-d); }
+    .cm-live { color: #e8a000; font-size: 11px; transform: rotate(45deg); display: inline-block; }
+    /* 제보 버튼: 누른 것만 색 (여유 초록 · 보통 노랑 · 혼잡 빨강) */
+    .report-opt.is-on[data-level="ok"] { background: #e8f6ec; border-color: #2fa84f; }
+    .report-opt.is-on[data-level="mid"] { background: #fff6dc; border-color: #e8a000; }
+    .report-opt.is-on[data-level="busy"] { background: #fdeaea; border-color: #e0484f; }
+    .report-opt.is-on[data-level="ok"] i, .report-opt.is-on[data-level="ok"] span { color: #1f7a3a; }
+    .report-opt.is-on[data-level="mid"] i, .report-opt.is-on[data-level="mid"] span { color: #9a6a00; }
+    .report-opt.is-on[data-level="busy"] i, .report-opt.is-on[data-level="busy"] span { color: #b8262d; }
+    .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
+    /* 짙은 패널 위 안내·오류·출처 글씨 */
+    #rec-results > .p-3 { background: #fff; border-radius: 12px; }
+    #rec-results > details, #rec-results > .px-3\.5 { color: #dbe6f1; }
+    #rec-results > details b { color: #fff; }
+
+    /* Subtle finish; keep the original layout, sizing and color roles. */
+    #view-app { background-color: #f3f5f7; letter-spacing: -0.015em; }
+    #view-app .font-black { font-weight: 800; }
+    #view-app .font-extrabold { font-weight: 750; }
+    #view-app .text-slate-900 { color: #202b3b; }
+    #view-app .text-slate-500 { color: #687587; }
+    #view-app > div:first-child { box-shadow: none; border-bottom-color: #e7ebf0; }
+    #app-scroll-content .shadow-sm { box-shadow: 0 1px 3px rgba(25, 40, 60, 0.035); }
+    #app-scroll-content .border-slate-200\/80 { border-color: #e4e9ef; }
+    #app-scroll-content .cm-panel { box-shadow: 0 2px 7px rgba(25, 40, 60, 0.08); }
+    .cm-card { box-shadow: 0 1px 2px rgba(25, 40, 60, 0.04); }
+    .cm-min, #brief-leave { font-variant-numeric: tabular-nums; }
+    .cm-go { font-weight: 750; }
+    #view-app > nav { border-top-color: #e7ebf0; box-shadow: 0 -2px 8px rgba(25, 40, 60, 0.025); }
+    #view-app button:focus-visible, #view-app input:focus-visible, #view-app select:focus-visible {
+      outline: 2px solid #6b8caf; outline-offset: 2px;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-start p-3 sm:p-6 overflow-x-hidden">
@@ -222,7 +268,7 @@
       <!-- ============================================================= -->
       <!-- 1. SCREEN A: iOS LOCK SCREEN                                 -->
       <!-- ============================================================= -->
-      <section id="view-lockscreen" class="absolute inset-0 z-30 flex flex-col justify-between p-6 text-white" style="background: linear-gradient(180deg, #090d16 0%, #111827 50%, #030712 100%);">
+      <section id="view-lockscreen" class="absolute inset-0 z-30 flex flex-col justify-between p-6 text-white" style="background: #0b111c;">
         
         <!-- Top Clock & Date Area -->
         <div class="text-center mt-6">
@@ -245,7 +291,7 @@
           <p id="lock-card-body" class="text-[11px] text-slate-300 mt-1 leading-relaxed">
             아직 계산 전이라 예시 화면이에요. 집을 등록하면 수업 끝나는 시각 기준 실제 경로가 표시돼요.
           </p>
-          <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
+          <button onclick="unlockAndGoToCommute()" class="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 tap-press">
             <i class="ph-bold ph-door-open"></i>
             <span>앱 열고 상세 3가지 경로 확인</span>
           </button>
@@ -277,7 +323,7 @@
       <!-- ============================================================= -->
       <!-- 2. SCREEN B: iOS SPRINGBOARD (IPHONE HOME SCREEN)            -->
       <!-- ============================================================= -->
-      <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 60%, #020617 100%);">
+      <section id="view-ios-homescreen" class="absolute inset-0 z-20 flex flex-col justify-between p-5 text-white select-none hidden overflow-hidden" style="background: #0f172a;">
         
         <div class="text-center -mb-2"><span class="demo-chip">시연 화면 · 실제 아이폰 홈 아님</span></div>
         <!-- Springboard Top Grid & Widgets -->
@@ -304,7 +350,7 @@
             
             <!-- PROMINENT '⚡ SKIP' APP ICON -->
             <button onclick="openSkipApp()" class="flex flex-col items-center gap-1 group tap-press">
-              <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
+              <div class="relative w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
                 <i class="ph-fill ph-lightning text-3xl text-amber-300"></i>
                 <!-- Red Notification Badge -->
                 <span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-slate-900 shadow">1</span>
@@ -314,7 +360,7 @@
 
             <!-- Safari -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-blue-400 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-compass text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">Safari</span>
@@ -330,7 +376,7 @@
 
             <!-- Notes -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-b from-amber-200 to-yellow-400 flex items-center justify-center text-amber-900 shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-amber-200 flex items-center justify-center text-amber-900 shadow-md">
                 <i class="ph-bold ph-note-pencil text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">메모</span>
@@ -338,7 +384,7 @@
 
             <!-- Maps -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-emerald-400 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-map-trifold text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">지도</span>
@@ -354,7 +400,7 @@
 
             <!-- Instagram -->
             <div class="flex flex-col items-center gap-1 opacity-90">
-              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+              <div class="w-14 h-14 rounded-2xl bg-amber-500 flex items-center justify-center text-white shadow-md">
                 <i class="ph-bold ph-instagram-logo text-2xl"></i>
               </div>
               <span class="text-[11px] text-slate-300">Instagram</span>
@@ -436,46 +482,31 @@
           <div id="tab-pane-1" class="space-y-3">
             
             <!-- 능동 하교 브리핑: 시간표 종료 시각 + 실시간 추천 엔진 (/api/recommend) -->
-            <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-blue-900 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
-              <div class="flex items-center justify-between text-xs mb-2">
-                <span class="bg-blue-500/30 text-cyan-200 border border-cyan-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                  <i class="ph-bold ph-sparkle text-amber-300"></i> 능동 하교 브리핑
-                </span>
-                <span id="brief-basis" class="text-blue-200 text-[11px] font-mono"></span>
+            <!-- 눈이 덜 피곤하게: 흰 카드, 강조색은 초록 버튼 하나, 숫자 위계로 정보 전달 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 text-slate-900">
+              <div class="flex items-center justify-between text-[11px] text-slate-500">
+                <span class="font-bold flex items-center gap-1"><i class="ph-bold ph-house-line"></i> 집으로 · <span id="home-card-dest" class="truncate">집 미등록</span></span>
+                <span id="brief-basis"></span>
               </div>
-              <h2 id="brief-title" class="text-base font-extrabold leading-snug">실시간 경로 계산 중…</h2>
+              <h2 id="brief-title" class="mt-1.5 text-[15px] font-extrabold leading-snug">실시간 경로 계산 중…</h2>
               <!-- 출발 시각 · 추천 경로 (계산되면 보임) -->
-              <div id="brief-main" class="hidden mt-2.5 space-y-2">
-                <div class="flex items-end gap-2">
+              <div id="brief-main" class="hidden mt-3 space-y-2.5">
+                <div class="flex items-end justify-between">
                   <div>
-                    <div class="text-[10px] text-blue-200">출발</div>
-                    <div id="brief-leave" class="text-3xl font-black leading-none text-amber-300"></div>
+                    <div class="text-[10px] font-bold text-slate-400">이때 나가면 돼요</div>
+                    <div id="brief-leave" class="text-[34px] font-black leading-none tracking-tight"></div>
+                    <div id="brief-board" class="mt-1 text-[11px] text-slate-500"></div>
                   </div>
-                  <div id="brief-board" class="text-xs text-blue-100 pb-0.5"></div>
+                  <div class="text-right">
+                    <div id="brief-eta" class="text-[11px] text-slate-500">-</div>
+                  </div>
                 </div>
-                <div>
-                  <div class="text-[10px] text-blue-200 mb-1">추천 경로</div>
-                  <div id="brief-route" class="flex flex-wrap items-center gap-1 text-xs font-bold"></div>
-                </div>
-                <div class="text-[10px] text-blue-200">추천 이유</div>
+                <div id="brief-route" class="flex flex-wrap items-center gap-1 text-[11px] font-bold"></div>
               </div>
-              <div id="brief-body" class="text-xs text-blue-100 mt-1 leading-relaxed"></div>
+              <div id="brief-body" class="text-[11px] text-slate-500 mt-2.5 leading-relaxed"></div>
 
-              <!-- Destination & Travel Time Grid -->
-              <div class="mt-3 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div class="text-[10px] text-blue-200">등록 목적지 (하차 거점)</div>
-                  <div id="home-card-dest" class="font-bold truncate mt-0.5">집 미등록</div>
-                </div>
-                <div class="border-l border-white/20 pl-2.5">
-                  <div class="text-[10px] text-blue-200">1순위 경로 도착</div>
-                  <div id="brief-eta" class="font-extrabold text-amber-300 mt-0.5">-</div>
-                </div>
-              </div>
-
-              <!-- Action Button to Commute Tab -->
-              <button onclick="goToDismissalCommuteTab()" class="mt-3.5 w-full py-2.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md tap-press">
-                <span>실시간 대안 경로 비교하기</span>
+              <button onclick="goToDismissalCommuteTab()" class="mt-3.5 w-full py-2.5 cm-go text-xs flex items-center justify-center gap-1.5 tap-press">
+                <span>다른 경로와 비교하기</span>
                 <i class="ph-bold ph-arrow-right"></i>
               </button>
             </div>
@@ -572,43 +603,54 @@
             <div id="submode-dismissal" class="space-y-3">
 
               <!-- 지금 하교 → 실시간 경로 추천 (/api/recommend) -->
-              <div class="bg-white rounded-2xl border-2 border-blue-600 shadow-md overflow-hidden">
-                <div class="px-3.5 pt-3 pb-2.5 space-y-2">
+              <div class="cm-panel rounded-2xl shadow-md overflow-hidden text-white">
+                <div class="px-3 pt-3 pb-2 space-y-2.5">
                   <div class="flex items-center justify-between">
-                    <span id="rec-title" class="text-sm font-extrabold text-slate-900">지금 하교하면?</span>
-                    <div class="flex items-center gap-1">
-                      <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-slate-400 hover:text-blue-600 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
-                      <div class="grid grid-cols-2 p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
-                        <button id="rec-mode-fast" onclick="setRecMode('fast')" class="px-2 py-0.5 rounded-md bg-white text-blue-700 shadow-sm">빠른 순</button>
-                        <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="px-2 py-0.5 rounded-md text-slate-500">편한 순</button>
+                    <span id="rec-title" class="text-sm font-extrabold">지금 하교하면?</span>
+                    <button onclick="document.getElementById('rec-mode-info').classList.toggle('hidden')" class="text-blue-100 text-base" aria-label="빠른 순·편한 순 설명"><i class="ph-bold ph-info"></i></button>
+                  </div>
+                  <!-- 출발 · 도착 -->
+                  <div class="cm-field text-xs divide-y divide-white/10">
+                    <div class="flex items-center gap-2 px-2.5 py-2">
+                      <span class="w-8 text-[10px] text-blue-100 font-bold">출발</span>
+                      <span class="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-white/70"></span>
+                      <span class="font-bold">현재 위치</span>
+                      <span class="text-[10px] text-blue-100">· 캠퍼스면 정문·후문 기준</span>
+                    </div>
+                    <div class="px-2.5 py-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-8 text-[10px] text-blue-100 font-bold">도착</span>
+                        <i class="ph-fill ph-map-pin text-rose-300"></i>
+                        <div class="flex gap-1.5 min-w-0">
+                          <button id="trip-home" onclick="clearTripDest()" class="cm-dest cm-active truncate tap-press">🏠 <span id="trip-home-name"></span></button>
+                          <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="cm-dest truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
+                        </div>
+                      </div>
+                      <div id="trip-search" class="hidden mt-2 space-y-1.5">
+                        <div class="flex gap-1.5">
+                          <input id="trip-q" placeholder="가려는 곳 주소, 가게, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-slate-900">
+                          <button onclick="searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="px-3 rounded-lg bg-white text-slate-800 font-bold tap-press">검색</button>
+                        </div>
+                        <div id="trip-results" class="space-y-1 text-slate-800"></div>
                       </div>
                     </div>
                   </div>
-                  <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed space-y-1">
-                    <div><b class="text-slate-800">빠른 순</b> · 예상 도착 시각이 이른 순서. 예상 소요 = 도보(내 걸음 속도·비 오면 더 길게) + 대기(실시간 → 지하철 시간표 → 배차간격 절반 순으로 사용) + 만차로 못 탈 확률 × 배차간격 + 탑승 시간.</div>
-                    <div><b class="text-slate-800">편한 순</b> · 예상 소요에 벌점을 더한 순서. 서서 가는 1분 +0.5분, 앉을 수 있을지 모르는 1분 +0.25분, 환승 1회 +2분. 그래서 몇 분 더 걸려도 앉아 가고 환승이 적은 경로가 위로 올라와요.</div>
+                  <!-- 정렬 방식 -->
+                  <div class="flex items-start gap-4 px-1">
+                    <button id="rec-mode-fast" onclick="setRecMode('fast')" class="cm-chip cm-active tap-press"><span class="cm-dot"><i class="ph-bold ph-lightning"></i></span>빠른 순</button>
+                    <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="cm-chip tap-press"><span class="cm-dot"><i class="ph-bold ph-armchair"></i></span>편한 순</button>
+                    <button onclick="runRecommend(false, false, true)" class="ml-auto self-center px-4 py-2 cm-go text-xs tap-press flex items-center gap-1">
+                      <i class="ph-bold ph-magnifying-glass"></i> 경로 찾기
+                    </button>
+                  </div>
+                  <div id="rec-mode-info" class="hidden p-2.5 rounded-xl bg-white/10 text-[11px] text-blue-50 leading-relaxed space-y-1">
+                    <div><b class="text-white">빠른 순</b> · 예상 도착 시각이 이른 순서. 예상 소요 = 도보(내 걸음 속도·비 오면 더 길게) + 대기(실시간 → 지하철 시간표 → 배차간격 절반 순으로 사용) + 만차로 못 탈 확률 × 배차간격 + 탑승 시간.</div>
+                    <div><b class="text-white">편한 순</b> · 예상 소요에 벌점을 더한 순서. 서서 가는 1분 +0.5분, 앉을 수 있을지 모르는 1분 +0.25분, 환승 1회 +2분. 그래서 몇 분 더 걸려도 앉아 가고 환승이 적은 경로가 위로 올라와요.</div>
                     <div>운행이 끝난 노선이 낀 경로는 순서와 상관없이 맨 아래에 회색으로 보여줘요.</div>
                   </div>
-                  <div class="text-xs">
-                    <div class="flex items-center gap-1.5">
-                      <span class="text-slate-500 shrink-0">도착지</span>
-                      <button id="trip-home" onclick="clearTripDest()" class="px-2 py-1 rounded-lg font-bold bg-blue-600 text-white truncate tap-press">🏠 <span id="trip-home-name"></span></button>
-                      <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="px-2 py-1 rounded-lg font-bold bg-slate-100 text-slate-600 truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
-                    </div>
-                    <div id="trip-search" class="hidden mt-2 space-y-1.5">
-                      <div class="flex gap-1.5">
-                        <input id="trip-q" placeholder="가려는 곳 주소, 가게, 역 이름" onkeydown="if (event.key === 'Enter') searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-slate-200">
-                        <button onclick="searchPlaces('trip-q', 'trip-results', 'setTripDest')" class="px-3 rounded-lg bg-blue-600 text-white font-bold tap-press">검색</button>
-                      </div>
-                      <div id="trip-results" class="space-y-1"></div>
-                    </div>
-                  </div>
-                  <button onclick="runRecommend(false, false, true)" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold tap-press">
-                    내 위치로 최적 경로 찾기
-                  </button>
-                  <div id="rec-meta" class="text-[10px] text-slate-500"></div>
+                  <div id="rec-meta" class="text-[10px] text-blue-100"></div>
                 </div>
-                <div id="rec-results" class="divide-y divide-slate-100 text-xs"></div>
+                <div id="rec-results" class="px-2 pb-2 space-y-1.5 text-xs"></div>
               </div>
 
               <!-- 실시간 출발 현황 (서울시 버스·지하철 API) -->
@@ -638,7 +680,7 @@
             <div id="submode-morning" class="space-y-3 hidden">
               
               <!-- 시간표 연동 등교 알람 (/api/recommend?direction=school) -->
-              <div class="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-2xl p-4 text-white shadow-md">
+              <div class="bg-indigo-900 rounded-2xl p-4 text-white shadow-md">
                 <div class="flex items-center justify-between text-xs mb-2">
                   <span class="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold">
                     ⏰ 시간표 연동 등교 알람
@@ -682,26 +724,27 @@
             
             <!-- One-Touch Quick Report Box -->
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
-              <div class="font-bold text-xs text-slate-800 mb-1">📢 실시간 정류장 원터치 제보</div>
-              <p class="text-[11px] text-slate-500 mb-3">
-                지금 정류장 대기 상황을 눌러 학우들의 경로 판단을 도와주세요!
-              </p>
+              <div class="font-extrabold text-[13px] text-slate-900 mb-1 flex items-center gap-1"><i class="ph-bold ph-megaphone-simple text-slate-500"></i> 지금 정류장 줄 상황</div>
+              <p class="text-[11px] text-slate-500 mb-3">한 번 누르면 다른 학생들 경로 판단에 보여줘요.</p>
               <div class="flex items-center justify-between mb-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
                 <span class="text-slate-500">제보 위치 <b id="report-stop" class="text-slate-800">확인 중…</b></span>
                 <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
               </div>
-              <div class="grid grid-cols-3 gap-2 text-xs">
-                <button onclick="submitReport('ok')" class="py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🟢</span>
-                  <span>여유</span>
+              <div class="grid grid-cols-3 gap-2">
+                <button onclick="selectReport(this); submitReport('ok')" data-level="ok" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-user text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">여유</span>
+                  <span class="text-[10px] text-slate-500">바로 타요</span>
                 </button>
-                <button onclick="submitReport('mid')" class="py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🟡</span>
-                  <span>보통</span>
+                <button onclick="selectReport(this); submitReport('mid')" data-level="mid" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-users text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">보통</span>
+                  <span class="text-[10px] text-slate-500">한 대 보내요</span>
                 </button>
-                <button onclick="submitReport('busy')" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold flex flex-col items-center gap-0.5 tap-press">
-                  <span class="text-sm">🔴</span>
-                  <span>혼잡</span>
+                <button onclick="selectReport(this); submitReport('busy')" data-level="busy" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                  <i class="ph-bold ph-users-three text-xl text-slate-700"></i>
+                  <span class="text-[13px] font-extrabold text-slate-900">혼잡</span>
+                  <span class="text-[10px] text-slate-500">줄이 길어요</span>
                 </button>
               </div>
             </div>
@@ -796,7 +839,7 @@
                 <input id="set-dismissalPush" type="checkbox" onchange="setAppSetting('dismissalPush', this.checked)" class="w-4 h-4 accent-blue-600">
               </label>
               <label class="flex items-center justify-between gap-2">
-                <span>길안내 중 돌발 상황 우회 안내<span class="block text-[10px] text-slate-400">타기 전: 탈 버스가 만차·5분 이상 지연·운행 종료이거나 혼잡 제보가 있으면 다른 추천 경로 안내 · 탄 뒤: 5분 넘게 늦어지면 더 빠른 경로 제안</span></span>
+                <span>이동 중 돌발 상황 우회 안내<span class="block text-[10px] text-slate-400">길안내 중 탈 버스가 만차·5분 이상 지연·운행 종료이거나 혼잡 제보가 있으면 대안 경로 안내</span></span>
                 <input id="set-reroute" type="checkbox" onchange="setAppSetting('reroute', this.checked)" class="w-4 h-4 accent-blue-600">
               </label>
             </div>
@@ -806,27 +849,20 @@
 
         <!-- 걷는 중: 정류장에 도착하면 '도착'을 눌러 내 걸음 속도 측정 -->
         <!-- 실시간 길안내: 지금 할 일, 남은 거리, 음성 켜기/끄기 -->
-        <div id="nav-bar" class="hidden bg-blue-700 text-white px-3.5 py-2.5 shrink-0 z-20 text-xs">
+        <div id="nav-bar" class="hidden text-white px-3.5 py-2.5 shrink-0 z-20 text-xs" style="background:var(--cm-green)">
           <div class="flex items-center gap-2">
-            <i class="ph-bold ph-navigation-arrow text-cyan-300 text-base"></i>
+            <i class="ph-bold ph-navigation-arrow text-white text-base"></i>
             <div class="flex-1 min-w-0">
-              <div class="text-[10px] text-blue-100"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
+              <div class="text-[10px] text-green-50"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
               <div id="nav-label" class="font-extrabold truncate"></div>
             </div>
             <button id="nav-mute" onclick="toggleNavMute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="음성 켜기/끄기"></button>
             <button onclick="advanceNav(true)" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press">다음</button>
-            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white text-blue-700 font-extrabold tap-press">종료</button>
+            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-green-d)">종료</button>
           </div>
-          <div id="nav-say" class="mt-1 text-[11px] text-blue-50 leading-snug"></div>
-          <div id="nav-offer" class="hidden mt-2 p-2.5 rounded-xl bg-white text-slate-900">
-            <div id="nav-offer-text" class="font-bold leading-snug"></div>
-            <div class="mt-2 grid grid-cols-2 gap-2">
-              <button onclick="declineReroute()" class="py-1.5 rounded-lg bg-slate-100 text-slate-700 font-bold tap-press">그대로 가기</button>
-              <button onclick="acceptReroute()" class="py-1.5 rounded-lg bg-blue-600 text-white font-bold tap-press">경로 바꾸기</button>
-            </div>
-          </div>
-          <!-- 타기 전 돌발 상황(만차·지연·혼잡 제보) 때 대안 경로, 셔틀 탔어요·내렸어요 -->
-          <div id="nav-alert" class="hidden mt-2 p-2.5 rounded-xl bg-white text-slate-800 text-[11px] leading-snug"></div>
+          <div id="nav-say" class="mt-1 text-[11px] text-white leading-snug"></div>
+          <!-- 돌발 상황(만차·지연·혼잡 제보) 때 대안 경로 -->
+          <div id="nav-alert" class="hidden mt-1.5 p-2 bg-white text-slate-800 text-[11px] leading-snug"></div>
         </div>
 
         <div id="walk-trip-bar" class="hidden bg-slate-900 text-white px-3.5 py-2 flex items-center gap-2 text-xs shrink-0 z-20">
@@ -1240,12 +1276,7 @@
 
     function setRecMode(mode) {
       recMode = mode;
-      const on = ['bg-white', 'text-blue-700', 'shadow-sm'];
-      for (const m of ['fast', 'comfort']) {
-        const btn = document.getElementById(`rec-mode-${m}`);
-        btn.classList.toggle('text-slate-500', m !== mode);
-        on.forEach((c) => btn.classList.toggle(c, m === mode));
-      }
+      for (const m of ['fast', 'comfort']) document.getElementById(`rec-mode-${m}`).classList.toggle('cm-active', m === mode);
       if (document.getElementById('rec-results').children.length) runRecommend();
     }
 
@@ -1433,8 +1464,7 @@
 
     async function disablePush() {
       const st = pushState();
-      await Promise.all(Object.values(st.jobs || {}).flatMap((j) => [j.id, j.checkId]).filter(Boolean)
-        .map((id) => pushApi({ action: 'cancel', messageId: id }).catch(() => {})));
+      await Promise.all(Object.values(st.jobs || {}).map((j) => pushApi({ action: 'cancel', messageId: j.id }).catch(() => {})));
       try { await (await pushSubscription())?.unsubscribe(); } catch {}
       savePushState({ enabled: false, jobs: {} });
       renderPushStatus('알림을 껐어요.');
@@ -1445,9 +1475,7 @@
     function appSettings() {
       let saved = {};
       try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch {}
-      let reroute = true;
-      try { reroute = localStorage.getItem('skip.reroute') !== '0'; } catch {}
-      return { morningPush: true, dismissalPush: true, reroute, ...saved };
+      return { morningPush: true, dismissalPush: true, reroute: true, ...saved };
     }
     function setAppSetting(key, on) {
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...appSettings(), [key]: on })); } catch {}
@@ -1478,8 +1506,7 @@
     }
 
     // kind별로 하나만 예약. 시각이 1분 넘게 바뀌면 예전 예약을 취소하고 다시
-    // 등교(prepMin 있음)는 서버가 알람 1시간 전에 다시 계산해서 비·정체면 알람을 앞당김
-    async function schedulePush(kind, at, params, plannedLeaveBy, prepMin) {
+    async function schedulePush(kind, at, params, plannedLeaveBy) {
       const st = pushState();
       if (!st.enabled || !at || at < Date.now() + 60_000) return;
       if (!appSettings()[kind === 'morning' ? 'morningPush' : 'dismissalPush']) return;
@@ -1491,9 +1518,8 @@
         // 예약에는 GPS 위치를 넣지 않음 (발송 시각엔 정문 기준으로 계산)
         const query = recQuery(params);
         query.delete('lat'); query.delete('lng');
-        const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, prepMin,
-          cancel: [prev?.id, prev?.checkId].filter(Boolean) });
-        savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId, checkId: r.checkId ?? null } } });
+        const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, cancel: prev?.id });
+        savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId } } });
         renderPushStatus();
       } catch (e) {
         renderPushStatus(`알림 예약 실패: ${e.message}`);
@@ -1567,7 +1593,7 @@
       }
       const total = segs.reduce((a, b) => a + b.min, 0) || 1;
       return `<div class="flex h-3 rounded-full overflow-hidden bg-slate-100">${segs.map((g) =>
-        `<div title="${escapeHtml(g.label)}" style="width:${(g.min / total) * 100}%;background:${g.color}${g.dashed ? ';background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(255,255,255,.7) 3px 6px)' : ''}"></div>`).join('')}</div>`;
+        `<div title="${escapeHtml(g.label)}" style="width:${(g.min / total) * 100}%;background:${g.color}"></div>`).join('')}</div>`;
     }
 
     function stationCongestionBars(l) {
@@ -1633,9 +1659,10 @@
     function renderRouteDetail(r, dest, i, morning) {
       const firstWalk = r.legs[0]?.type === 'walk' && r.legs[0].to ? r.legs[0] : null;
       const startButton = r.unavailable ? '' : `
-        <button onclick="startNavigation(${i}, ${morning})" class="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-1 tap-press">
-          <i class="ph-bold ph-navigation-arrow"></i> 이 경로로 안내 시작${!morning && firstWalk ? ` · ${escapeHtml(firstWalk.to)}까지 걸음 측정` : ''}
+        <button onclick="startNavigation(${i}, ${morning})" class="w-full py-3 cm-go text-sm flex items-center justify-center gap-1.5 tap-press">
+          출발 <i class="ph-bold ph-arrow-circle-right text-lg"></i>
         </button>
+        ${!morning && firstWalk ? `<div class="text-[10px] text-slate-400 text-center">${escapeHtml(firstWalk.to)}까지 걸음도 같이 측정해요</div>` : ''}
         <div class="text-[10px] text-slate-400 text-center">위치를 따라가며 음성으로 안내해요. 화면을 켜 둔 채 앱을 앞에 두세요.</div>`;
       const rides = r.legs.filter((l) => l.type !== 'walk');
       const walkMin = r.legs.filter((l) => l.type === 'walk').reduce((a, l) => a + l.minutes, 0);
@@ -1708,31 +1735,35 @@
     function renderRoutes(routes, { morning = false, dest = '' } = {}) {
       if (!morning) lastRoutes = routes;
       else lastMorningRoutes = routes;
-      return routes.map((r, i) => `
-          <div class="px-3.5 py-2.5 ${r.unavailable ? 'opacity-50' : i === 0 ? 'bg-blue-50/60' : ''}">
-            <div onclick="toggleRoute(this)" class="space-y-1.5 cursor-pointer">
-              <div class="flex items-baseline justify-between">
-                <span class="font-extrabold ${i === 0 ? 'text-blue-700' : 'text-slate-800'}">${i + 1}순위 · ${morning ? `늦어도 ${hhmm(r.leaveBy)} 출발` : `${hhmm(r.arriveAt)} 도착`}</span>
-                <span class="text-[11px] text-slate-500 flex items-center gap-1">${Math.round(r.totalSec / 60)}분${r.standingMin ? ` · 서서 ${r.standingMin}분` : ''}
-                  <i class="route-chevron ph-bold ph-caret-down transition-transform"></i></span>
+      const cards = routes.map((r, i) => {
+        const first = r.legs.find((l) => l.type !== 'walk');
+        const chain = r.legs.map((l) => l.type === 'walk'
+          ? (l.minutes >= 3 ? '<i class="ph-bold ph-person-simple-walk text-slate-500 text-sm"></i>' : '')
+          : `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`)
+          .filter(Boolean).join('<span class="text-slate-300 text-[10px]">·</span>');
+        const waitMin = first ? Math.round(first.waitSec / 60) : null;
+        return `
+          <div class="cm-card px-3 py-2.5 ${r.unavailable ? 'opacity-50' : ''}">
+            <div onclick="toggleRoute(this)" class="flex gap-2 cursor-pointer">
+              <div class="flex-1 min-w-0 space-y-1">
+                <div class="flex items-center gap-1 flex-wrap">${chain}</div>
+                ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
+                ${first?.report && first.report.level !== 'ok' ? `<div class="text-[10px] font-bold ${first.report.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보: 줄 ${escapeHtml(first.report.label)} (${first.report.agoMin}분 전) · 못 탈 확률 ${Math.round(first.missProb * 100)}% 반영</div>` : ''}
+                ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
               </div>
-              ${reportLine(r)}
-              ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-              <div class="flex items-center gap-1 flex-wrap">${r.legs.filter((l) => l.type !== 'walk').map((l) =>
-                `<span class="px-1.5 py-0.5 rounded text-white text-[10px] font-extrabold" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`).join('<i class="ph-bold ph-caret-right text-slate-400 text-[10px]"></i>')}
-                <span class="text-[10px] text-slate-400 ml-1">눌러서 자세히</span>
+              <div class="text-right shrink-0">
+                <div><span class="cm-min">${Math.round(r.totalSec / 60)}</span><span class="text-[11px] font-bold text-slate-500">분</span></div>
+                <div class="mt-1"><span class="cm-arrive">${morning ? `${hhmm(r.leaveBy)}까지 출발` : `도착 ${hhmm(r.arriveAt)}`}</span></div>
+                ${r.standingMin ? `<div class="text-[10px] text-slate-400 mt-0.5">서서 ${r.standingMin}분</div>` : ''}
+                <i class="route-chevron ph-bold ph-caret-down text-slate-300 transition-transform"></i>
               </div>
             </div>
             ${renderRouteDetail(r, dest, i, morning)}
-          </div>`).join('') || '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
-    }
-
-    // 첫 탈것 정류장에 15분 안 학우 제보가 있으면 근거와 함께 표시
-    function reportLine(r) {
-      const first = r.legs.find((l) => l.type !== 'walk');
-      const rep = first?.report;
-      if (!rep || rep.level === 'ok') return '';
-      return `<div class="text-[10px] font-bold ${rep.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보: 줄 ${escapeHtml(rep.label)} (${rep.agoMin}분 전) · 못 탈 확률 ${Math.round(first.missProb * 100)}% 반영</div>`;
+          </div>`;
+      });
+      if (!cards.length) return '<div class="p-3 text-slate-500">경로를 찾지 못했어요</div>';
+      // 하교 목록만 짙은 패널 위 카드형 (등교 목록은 기존 흰 카드 안이라 구분선만)
+      return morning ? cards.join('') : `<div class="cm-section">추천 경로</div>${cards.join('')}`;
     }
 
     function rideName(l) {
@@ -1865,9 +1896,9 @@
           return;
         }
         const first = top.legs.find((l) => l.type !== 'walk');
-        title.innerHTML = `${escapeHtml(first.from)} <span class="text-cyan-300">${escapeHtml(rideName(first))}</span> 추천 · ${hhmm(top.arriveAt)} ${escapeHtml(destLabel(data.destination))} 도착`;
+        title.textContent = `${first.from}에서 ${rideName(first)} 타기`;
         document.getElementById('brief-leave').textContent = hhmm(top.leaveAt);
-        document.getElementById('brief-board').innerHTML = `${hhmm(first.departAt)} ${escapeHtml(first.from)} 탑승<br>총 ${Math.round(top.totalSec / 60)}분`;
+        document.getElementById('brief-board').textContent = `${hhmm(first.departAt)} 탑승 · 대기 ${Math.round(first.waitSec / 60)}분${first.realtime ? ' (실시간)' : ''}`;
         document.getElementById('brief-route').innerHTML = routeChips(top);
         document.getElementById('brief-main').classList.remove('hidden');
 
@@ -1886,13 +1917,13 @@
         const rides = top.legs.filter((l) => l.type !== 'walk');
         if (top.standingMin) reasons.push(`서서 가는 구간이 약 ${top.standingMin}분 있어요.`);
         else if (rides.every((l) => l.seatLikely === true)) reasons.push('끝까지 앉아 갈 가능성이 높아요.');
-        body.innerHTML = `<ul class="list-disc pl-4 space-y-0.5">${reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`;
-        eta.textContent = `${Math.round(top.totalSec / 60)}분 (${hhmm(top.arriveAt)})`;
+        body.innerHTML = `<div class="text-slate-700">${escapeHtml(reasons[0])}</div>${reasons.length > 1 ? `<details class="mt-0.5"><summary class="cursor-pointer text-slate-400">추천 이유 더 보기</summary><ul class="mt-1 space-y-0.5">${reasons.slice(1).map((r) => `<li>· ${escapeHtml(r)}</li>`).join('')}</ul></details>` : ''}`;
+        eta.innerHTML = `<div><span class="cm-min">${Math.round(top.totalSec / 60)}</span><span class="font-bold">분</span></div><span class="cm-arrive mt-1">도착 ${hhmm(top.arriveAt)}</span>`;
         fillDemoNotice(data, top, first, basis);
         scheduleLiveRefresh(basis.at);
       } catch (e) {
         title.textContent = '경로를 불러오지 못했어요';
-        body.innerHTML = `${escapeHtml(e.message)}<br><button onclick="sessionStorage.clear(); loadHomeBriefing()" class="mt-1.5 px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs font-bold tap-press">다시 시도</button>`;
+        body.innerHTML = `${escapeHtml(e.message)}<br><button onclick="sessionStorage.clear(); loadHomeBriefing()" class="mt-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold tap-press">다시 시도</button>`;
         eta.textContent = '-';
       }
     }
@@ -1900,9 +1931,9 @@
     // 홈 카드용 경로 요약: 🚶 4분 › 🚌 7211 › 🚇 4호선
     function routeChips(r) {
       return r.legs.map((l) => l.type === 'walk'
-        ? `<span class="px-1.5 py-0.5 rounded-md bg-white/10 text-blue-100">🚶 ${l.minutes}분</span>`
-        : `<span class="px-1.5 py-0.5 rounded-md text-white" style="background:${legColor(l)}">${l.type === 'bus' ? '🚌' : '🚇'} ${escapeHtml(rideName(l))}</span>`)
-        .join('<span class="text-blue-300">›</span>');
+        ? `<span class="flex items-center gap-0.5 text-slate-500"><i class="ph-bold ph-person-simple-walk"></i>${l.minutes}분</span>`
+        : `<span class="px-1.5 py-0.5 rounded text-white" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`)
+        .join('<span class="text-slate-300">·</span>');
     }
 
     // 데스크톱 데모의 잠금화면·푸시 배너를 실제 추천 결과로 채움
@@ -1920,9 +1951,9 @@
         lockW.innerHTML = `<i class="ph-bold ${w.precip ? 'ph-cloud-rain' : 'ph-sun'} text-cyan-300"></i><span>국민대 ${escapeHtml(w.precip ?? '강수 없음')}${w.tempC != null ? ` · ${w.tempC}°C` : ''}</span>`;
         lockW.classList.remove('hidden');
         document.getElementById('sb-temp').textContent = w.tempC != null ? `${w.tempC}°` : '-';
-        document.getElementById('sb-weather').textContent = `${w.precip ?? '강수 없음'} · 기상청 ${w.source ?? '예보'}`;
+        document.getElementById('sb-weather').textContent = `${w.precip ?? '강수 없음'} · 기상청 초단기예보`;
       } else {
-        document.getElementById('sb-weather').textContent = '약 2일 안의 예보 반영';
+        document.getElementById('sb-weather').textContent = '하교 6시간 전부터 예보 반영';
       }
     }
 
@@ -2017,8 +2048,8 @@
         }).join('') : '<div class="text-slate-500">오늘 남은 셔틀이 없어요.</div>';
       const stopNotes = froms.map((f) => `<li>${escapeHtml(data.stops[f].detail)}</li>`).join('');
       const action = ride
-        ? `<button onclick="shuttleAlight()" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-extrabold tap-press">내렸어요 <span class="font-normal text-xs">(${ride.dep} ${escapeHtml(ride.lineName)} 탑승 중)</span></button>`
-        : data.serviceDay ? `<button onclick="shuttleBoard(${JSON.stringify(froms).replace(/"/g, '&quot;')})" class="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-extrabold tap-press">셔틀 탔어요</button>` : '';
+        ? `<button onclick="shuttleAlight()" class="w-full py-2.5 cm-go text-sm font-extrabold tap-press">내렸어요 <span class="font-normal text-xs">(${ride.dep} ${escapeHtml(ride.lineName)} 탑승 중)</span></button>`
+        : data.serviceDay ? `<button onclick="shuttleBoard(${JSON.stringify(froms).replace(/"/g, '&quot;')})" class="w-full py-2.5 bg-slate-900 text-white text-sm font-extrabold tap-press">셔틀 탔어요</button>` : '';
       return `${rows}
         ${action}
         <div class="text-[10px] text-slate-400 leading-relaxed">셔틀은 실시간 위치 정보가 없어서, 탈 때 '셔틀 탔어요'·내릴 때 '내렸어요'를 누르면 다른 학생들에게 실제 출발과 걸린 시간이 보여요. 승차장 근처에서만 기록돼요.
@@ -2463,7 +2494,7 @@
         if (!top) throw new Error('경로를 찾지 못했어요');
         const leaveBy = new Date(top.leaveBy);
         const alarmAt = new Date(leaveBy.getTime() - prep * 60000);
-        schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime(), prep);
+        schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime());
         alarm.innerHTML = `${dayLabel} <span class="text-cyan-300">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
         const live = top.legs.some((l) => l.realtime);
         reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
@@ -2689,6 +2720,10 @@
       return reportStop;
     }
 
+    function selectReport(btn) {
+      document.querySelectorAll('.report-opt').forEach((b) => b.classList.toggle('is-on', b === btn));
+    }
+
     const REPORT_LEVELS = { ok: '여유', mid: '보통', busy: '혼잡' };
     const REPORT_COLOR = { ok: 'emerald', mid: 'amber', busy: 'rose' };
     const FEED_SHOWN = 3; // 처음 보이는 정류장 수, 나머지는 더보기
@@ -2872,12 +2907,7 @@
     function renderTripDest() {
       document.getElementById('trip-home-name').textContent = homeDestination || '집 등록';
       document.getElementById('trip-other-name').textContent = tripDest ? tripDest.name : '다른 곳';
-      const on = ['bg-blue-600', 'text-white'], off = ['bg-slate-100', 'text-slate-600'];
-      for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) {
-        const el = document.getElementById(id);
-        el.classList.remove(...on, ...off);
-        el.classList.add(...(active ? on : off));
-      }
+      for (const [id, active] of [['trip-home', !tripDest], ['trip-other', !!tripDest]]) document.getElementById(id).classList.toggle('cm-active', active);
     }
 
     function setTripDest(i) {
@@ -3054,21 +3084,13 @@
     // 지하철은 지하라 GPS가 잘 안 잡혀서 예상 도착 시각으로도 넘어감 (버스도 GPS가 1분 넘게 안 오면 시각 기준)
     const NAV_KEY = 'skip.nav';
     const NAV_GPS_STALE_MS = 60000;
-    // 지하철은 예상보다 조금 일찍 도착할 수 있어 살짝 먼저 안내 (내릴 준비 1분 30초 전, 내리세요 20초 전)
-    // 3분 전으로 했더니 한 정거장 일찍 안내가 나와서 줄임 (한 구간이 약 2분)
-    const SUBWAY_PREP_MS = 90e3;
-    const SUBWAY_ALIGHT_MS = 20e3;
+    // 지하철은 예상보다 일찍 도착하는 경우가 있어 넉넉히 먼저 안내 (내릴 준비 3분 전, 내리세요 1분 전)
+    const SUBWAY_PREP_MS = 180e3;
+    const SUBWAY_ALIGHT_MS = 60e3;
     let navWatchId = null;
     let navTimer = null;
     let navWakeLock = null;
     let navLastFix = 0;
-    let navLastPos = null;
-    let navBusTimer = null;
-    // 실시간 우회: 계획보다 5분 넘게 늦으면 이동 1회에 최대 1번만 경로 재검색 (ODsay 유료 호출이라 횟수를 막아 둠)
-    const REROUTE_DELAY_MS = 5 * 60e3;
-    const REROUTE_GAIN_MIN = 5; // 이만큼 이상 빨라질 때만 제안
-    const REROUTE_OFFER_MS = 3 * 60e3; // 제안은 3분 지나면 내림 (계산이 낡음)
-    const NAV_BUS_CHECK_MS = 90e3;
 
     function navState() {
       try { return JSON.parse(localStorage.getItem(NAV_KEY)); } catch { return null; }
@@ -3124,17 +3146,14 @@
           say: prev
             ? `${getOff(prev)} ${from}까지 걸어서 갈아타세요${walkMin ? `, 약 ${walkMin}분` : ''}.`
             : `길안내를 시작할게요. ${from}까지 걸어가세요${walkMin ? `. 약 ${walkMin}분 걸려요` : ''}.`,
-          target: l.fromPos, radius: subway ? 60 : 30, watch: bus,
-          planAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000,
+          target: l.fromPos, radius: subway ? 60 : 30, bus,
         });
         // 셔틀: 타는 단계에서 '셔틀 탔어요', 내리는 단계에서 '내렸어요' 버튼 (다른 학생에게 실제 출발·소요 공유)
         const shuttle = l.type === 'shuttle' ? { from: l.shuttleFrom, line: l.shuttleLine, dep: l.dep } : null;
         steps.push({
           label: `${vehicle} 타기`, shuttle: shuttle && { ...shuttle, act: 'board' },
           say: `${from}에 도착했어요. ${withEul(vehicle)} 타세요. ${hhmm(l.departAt)} 출발 예정이에요.`,
-          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway, watch: bus,
-          planAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3),
-          bus: !subway && l.vehId && l.endArs ? { vehId: l.vehId, endArs: l.endArs, route: l.route, arrive } : null,
+          target: l.preStop, radius: subway ? 400 : 150, timeAt: arrive - (subway ? SUBWAY_PREP_MS : 150e3), underground: subway, bus,
           // 지하철: 역에 실제 도착한 시각 기준으로 실시간 열차를 다시 찾아 이후 시각을 맞춤
           subway: subway ? {
             station: l.from, to, vehicle, lineId: l.lineId, dirs: l.dirs, rideMin: l.rideMin,
@@ -3145,7 +3164,6 @@
           label: `${to}에서 내리기`, shuttle: shuttle && { ...shuttle, act: 'alight' },
           say: `곧 ${to}이에요. 다음 ${subway ? '역' : '정류장'}에서 내릴 준비를 하세요.`,
           target: l.toPos, radius: subway ? 300 : 60, timeAt: arrive - (subway ? SUBWAY_ALIGHT_MS : 20e3), underground: subway,
-          planAt: arrive,
         });
         prev = l;
         walkMin = 0;
@@ -3163,11 +3181,7 @@
       const dest = morning ? lastMorningDest : lastDest;
       if (!r || !dest) return triggerToast('경로를 다시 찾은 뒤 시작해 주세요.');
       track('길안내-시작');
-      const nav = {
-        steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now(),
-        plannedArrive: Date.parse(r.arriveAt), destPos: dest.lat ? { lat: dest.lat, lng: dest.lng } : null, rerouteUsed: false,
-        alts: navAlternatives(r, morning ? lastMorningRoutes : lastRoutes),
-      };
+      const nav = { steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now(), destPos: dest, alts: navAlternatives(r, morning ? lastMorningRoutes : lastRoutes) };
       saveNav(nav);
       // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
       if (!morning && r.legs[0]?.type === 'walk' && r.legs[0].to) startWalkTrip(i, true);
@@ -3180,13 +3194,11 @@
       const nav = navState();
       const bar = document.getElementById('nav-bar');
       clearInterval(navTimer);
-      clearInterval(navBusTimer);
-      clearInterval(navWatchTimer);
       if (navWatchId != null) navigator.geolocation?.clearWatch(navWatchId);
       navWatchId = null;
       // 3시간 넘은 안내는 정리
       if (!nav || Date.now() - nav.startedAt > 3 * 3600e3) {
-        clearInterval(navWatchTimer);
+        clearInterval(navBusTimer);
         saveNav(null);
         renderNavAlert(null);
         bar.classList.add('hidden');
@@ -3205,11 +3217,10 @@
       if (navigator.geolocation) {
         navWatchId = navigator.geolocation.watchPosition((p) => {
           navLastFix = Date.now();
-          const here = { lat: p.coords.latitude, lng: p.coords.longitude };
-          navLastPos = here;
           const cur = navState();
           const step = cur?.steps[cur.idx];
           if (!step) return;
+          const here = { lat: p.coords.latitude, lng: p.coords.longitude };
           const d = step.target ? metersBetween(here, step.target) : null;
           renderNavBar(cur, d);
           // GPS 오차만큼 넓게 보되 반경의 2배까지만
@@ -3218,94 +3229,21 @@
           document.getElementById('nav-dist').textContent = 'GPS 안 잡힘 · 예상 시각으로 안내';
         }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
       }
-      clearInterval(navWatchTimer);
-      navWatchTimer = setInterval(watchBus, 60000);
+      clearInterval(navBusTimer);
+      navBusTimer = setInterval(watchBus, 60000);
       watchBus();
       renderNavAlert(nav);
       // 지하·GPS 끊김 대비: 예상 시각이 지나면 다음 단계로
       navTimer = setInterval(() => {
         const cur = navState();
         const step = cur?.steps[cur.idx];
-        if (cur?.offer && Date.now() - cur.offer.at > REROUTE_OFFER_MS) declineReroute();
-        if (step?.planAt) maybeReroute(Date.now() - step.planAt);
         if (!step?.timeAt) return;
         const gpsStale = Date.now() - navLastFix > NAV_GPS_STALE_MS;
         if ((step.underground || gpsStale || !step.target) && Date.now() >= step.timeAt) advanceNav();
       }, 5000);
-      navBusTimer = setInterval(checkBusDelay, NAV_BUS_CHECK_MS);
-    }
-
-    const rerouteEnabled = () => appSettings().reroute;
-
-    // 버스 타는 중: 내릴 정류장의 같은 차 도착 예정으로 얼마나 늦는지 확인
-    async function checkBusDelay() {
-      const nav = navState();
-      const b = nav?.steps[nav.idx]?.bus;
-      if (!b || nav.rerouteUsed || !rerouteEnabled()) return;
-      try {
-        const st = await fetch(`/api/bus?ars=${b.endArs}`).then((res) => res.json());
-        const a = st.routes?.find((r) => r.route === b.route)?.arrivals.find((x) => x.vehId === b.vehId && x.seconds != null);
-        if (!a) return;
-        const age = Math.max(0, (Date.now() - Date.parse(st.fetchedAt)) / 1000) || 0;
-        maybeReroute(Date.now() + (a.seconds - age) * 1000 - b.arrive);
-      } catch {}
-    }
-
-    // 5분 넘게 늦으면 지금 위치에서 다시 검색. 호출 전에 사용 표시를 저장해서 실패·새로고침해도 다시 안 부름
-    // GPS가 없으면(지하 등) 검색도 횟수 차감도 안 함
-    async function maybeReroute(delayMs) {
-      const nav = navState();
-      if (!nav || nav.rerouteUsed || !nav.destPos || delayMs <= REROUTE_DELAY_MS || !rerouteEnabled()) return;
-      if (nav.idx >= nav.steps.length - 1) return; // 마지막 도보는 바꿀 경로가 없음
-      if (!navLastPos || Date.now() - navLastFix > NAV_GPS_STALE_MS) return;
-      nav.rerouteUsed = true;
-      saveNav(nav);
-      track('길안내-재검색');
-      try {
-        const data = await fetchRecommend({
-          lat: navLastPos.lat, lng: navLastPos.lng,
-          homeLat: nav.destPos.lat.toFixed(4), homeLng: nav.destPos.lng.toFixed(4), homeName: nav.dest,
-        });
-        const cur = navState();
-        if (cur?.startedAt !== nav.startedAt) return;
-        const best = data.routes.find((r) => !r.unavailable);
-        const gain = best ? Math.round((cur.plannedArrive + delayMs - Date.parse(best.arriveAt)) / 60e3) : 0;
-        const first = best?.legs.find((l) => l.type !== 'walk');
-        if (!first || gain < REROUTE_GAIN_MIN) return triggerToast('늦어지고 있지만 지금 경로가 가장 빨라요.');
-        const say = `계획보다 ${Math.round(delayMs / 60e3)}분 늦어지고 있어요. ${first.from}에서 ${rideName(first)} 타면 ${gain}분 빨라요.`;
-        cur.offer = { at: Date.now(), say, route: best };
-        saveNav(cur);
-        speak(say);
-        renderNavBar(cur, null);
-      } catch {}
-    }
-
-    function acceptReroute() {
-      const nav = navState();
-      if (!nav?.offer) return;
-      track('길안내-우회');
-      nav.steps = buildNavSteps(nav.offer.route, { name: nav.dest, ...nav.destPos });
-      nav.steps[0].say = nav.steps[0].say.replace('길안내를 시작할게요.', '경로를 바꿨어요.');
-      nav.idx = 0;
-      nav.plannedArrive = Date.parse(nav.offer.route.arriveAt);
-      nav.offer = null;
-      saveNav(nav);
-      clearInterval(navTrainTimer);
-      speak(nav.steps[0].say);
-      resumeNavigation();
-    }
-
-    function declineReroute() {
-      const nav = navState();
-      if (!nav) return;
-      nav.offer = null;
-      saveNav(nav);
-      renderNavBar(nav, null);
     }
 
     function renderNavBar(nav, dist) {
-      document.getElementById('nav-offer').classList.toggle('hidden', !nav.offer);
-      if (nav.offer) document.getElementById('nav-offer-text').textContent = nav.offer.say;
       const step = nav.steps[nav.idx];
       document.getElementById('nav-step').textContent = `${nav.idx + 1}/${nav.steps.length}단계`;
       document.getElementById('nav-label').textContent = step.label;
@@ -3331,7 +3269,7 @@
       if (step.subway) retimeSubway(nav.idx);
       else if (step.nextBus) briefTransfer(nav.idx);
       else speak(step.say);
-      if (step.watch) watchBus();
+      if (step.bus) watchBus();
       renderNavAlert(nav);
       renderNavBar(nav, null);
       if (manual) document.getElementById('nav-dist').textContent = '위치 확인 중';
@@ -3340,7 +3278,7 @@
     // ---------------- 이동 중 돌발 상황 → 대안 경로 (만차·지연·운행 종료·학우 혼잡 제보) ----------------
     // 대안은 길안내를 시작할 때 함께 받은 다른 추천 경로 (새 길찾기 호출 없음). 버스 도착은 1분마다 실시간 확인
     const NAV_DELAY_ALERT_MS = 5 * 60e3;
-    let navWatchTimer = null;
+    let navBusTimer = null;
 
     function firstRideLabel(r) {
       const f = r.legs.find((l) => l.type !== 'walk');
@@ -3393,7 +3331,7 @@
     async function watchBus() {
       const nav = navState();
       const step = nav?.steps[nav.idx];
-      const bus = step?.watch;
+      const bus = step?.bus;
       // 버스를 탈 시각이 지나면 그만 봄
       if (!bus || !appSettings().reroute || Date.now() > bus.departAt + 3 * 60e3) return;
       let problem = null;
@@ -3419,20 +3357,20 @@
         if (sh.act === 'board' && !riding) {
           box.classList.remove('hidden');
           box.innerHTML = `셔틀에 타면 눌러 주세요. 다른 학생들에게 실제 출발 시각이 보여요.
-            <button onclick="shuttleBoard(['${sh.from}']).then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 rounded-lg bg-slate-900 text-white font-extrabold tap-press">셔틀 탔어요</button>`;
+            <button onclick="shuttleBoard(['${sh.from}']).then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 bg-slate-900 text-white font-extrabold tap-press">셔틀 탔어요</button>`;
           return;
         }
         if (sh.act === 'alight' && riding) {
           box.classList.remove('hidden');
           box.innerHTML = `내리면 눌러 주세요. 걸린 시간이 다음 추천에 쓰여요.
-            <button onclick="shuttleAlight().then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 rounded-lg bg-blue-600 text-white font-extrabold tap-press">내렸어요</button>`;
+            <button onclick="shuttleAlight().then(() => renderNavAlert(navState()))" class="mt-1 w-full py-1.5 cm-go font-extrabold tap-press">내렸어요</button>`;
           return;
         }
       }
       if (!nav?.alert || Date.now() - nav.alert.at > 20 * 60e3) return box.classList.add('hidden');
       box.classList.remove('hidden');
       box.innerHTML = `<div class="font-extrabold text-rose-700">⚠ ${escapeHtml(nav.alert.text)}</div>
-        ${(nav.alert.alts || []).map((a, k) => `<button onclick="switchNavRoute(${k})" class="mt-1 w-full text-left px-2 py-1.5 rounded-lg border border-slate-200 font-bold tap-press">대안 ${k + 1}: ${escapeHtml(a.label)} · ${hhmm(a.arriveAt)} 도착 예정 <span class="font-normal text-slate-500">(추천 당시 기준)</span></button>`).join('') || '<div class="mt-0.5 text-slate-500">다른 추천 경로가 없어요.</div>'}
+        ${(nav.alert.alts || []).map((a, k) => `<button onclick="switchNavRoute(${k})" class="mt-1 w-full text-left px-2 py-1.5 border border-slate-200 font-bold tap-press">대안 ${k + 1}: ${escapeHtml(a.label)} · ${hhmm(a.arriveAt)} 도착 예정 <span class="font-normal text-slate-500">(추천 당시 기준)</span></button>`).join('') || '<div class="mt-0.5 text-slate-500">다른 추천 경로가 없어요.</div>'}
         <button onclick="dismissNavAlert()" class="mt-1 text-slate-500 underline">이 경로 그대로 가기</button>`;
     }
 
@@ -3539,7 +3477,7 @@
 
     function stopNavigation() {
       clearInterval(navTrainTimer);
-      clearInterval(navWatchTimer);
+      clearInterval(navBusTimer);
       saveNav(null);
       speechSynthesis?.cancel?.();
       resumeNavigation();
