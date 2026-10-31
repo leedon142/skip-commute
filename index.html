@@ -1185,6 +1185,16 @@
     function switchTab(tabIndex) {
       track(`탭-${TAB_NAMES[tabIndex]}`);
       activeTab = tabIndex;
+      // 새로고침해도 보던 탭이 유지되게 주소에 남김 (알림·바로가기에서 온 from, mode는 다시 실행되지 않게 뺌)
+      if (APP_MODE) {
+        try {
+          const u = new URL(location.href);
+          u.searchParams.set('tab', tabIndex);
+          u.searchParams.delete('from');
+          u.searchParams.delete('mode');
+          history.replaceState(null, '', u);
+        } catch {}
+      }
       for (let i = 1; i <= 5; i++) {
         const pane = document.getElementById(`tab-pane-${i}`);
         const navBtn = document.getElementById(`nav-tab-${i}`);
