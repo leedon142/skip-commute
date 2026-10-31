@@ -109,7 +109,7 @@
     .demo-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px;
       background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 10px; font-weight: 700; }
     .live-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 9999px;
-      background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 10px; font-weight: 700; }
+      background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 10px; font-weight: 700; }
 
     .home-bar-pill {
       width: 138px;
@@ -118,7 +118,12 @@
       transition: width 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
     }
     /* ---- 실험: 이동 앱 스타일 (ui/citymapper-style 브랜치) ---- */
-    :root { --cm-panel: #405972; --cm-panel-2: #354e66; --cm-green: #2b9450; --cm-green-d: #237b42; --cm-blue: #337dbb; }
+    :root { --cm-panel: #405972; --cm-panel-2: #354e66; --cm-go: #2563eb; --cm-go-d: #1d4ed8; --cm-blue: #337dbb;
+      /* 그림자 3단계: 카드 < 떠 있는 카드/패널 < 파란 버튼. 잉크색(남청)을 섞어 겹겹이 */
+      --sh-card: 0 1px 3px rgba(23, 37, 68, 0.08), 0 10px 24px -8px rgba(23, 37, 68, 0.2);
+      --sh-float: 0 2px 4px rgba(23, 37, 68, 0.08), 0 6px 12px rgba(23, 37, 68, 0.07), 0 20px 36px -10px rgba(23, 37, 68, 0.3);
+      --sh-btn: 0 2px 3px rgba(29, 78, 216, 0.45), 0 12px 22px -8px rgba(37, 99, 235, 0.7);
+      --sh-btn-down: 0 1px 2px rgba(29, 78, 216, 0.45), 0 3px 7px -2px rgba(37, 99, 235, 0.5); }
     .cm-panel { background: var(--cm-panel); }
     .cm-field { background: var(--cm-panel-2); border-radius: 12px; }
     .cm-chip { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #dbe6f1; font-size: 10px; font-weight: 700; }
@@ -129,15 +134,31 @@
     .cm-dest.cm-active { background: #fff; color: var(--cm-panel); }
     .cm-card { background: #fff; border-radius: 12px; }
     .cm-min { font-size: 26px; line-height: 1; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
-    .cm-arrive { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #e3eefa; color: var(--cm-blue); font-size: 10px; font-weight: 800; }
-    .cm-go { background: var(--cm-green); color: #fff; border-radius: 9999px; font-weight: 900; }
-    .cm-go:hover { background: var(--cm-green-d); }
+    .cm-arrive { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #eef1f5; color: #475569; font-size: 10px; font-weight: 800; }
+    .cm-go { background: var(--cm-go); color: #fff; border-radius: 9999px; font-weight: 900; box-shadow: var(--sh-btn); transition: box-shadow 0.15s ease, transform 0.1s ease, background-color 0.15s ease; }
+    .cm-go:hover { background: var(--cm-go-d); }
+    .cm-go:active { box-shadow: var(--sh-btn-down); transform: translateY(1px); }
+    /* 각진(둥근 사각형) 파란 버튼용: 모양은 클래스로, 색·그림자는 .cm-go와 동일 */
+    .btn-go { background: var(--cm-go); color: #fff; box-shadow: var(--sh-btn); transition: box-shadow 0.15s ease, transform 0.1s ease, background-color 0.15s ease; }
+    .btn-go:hover { background: var(--cm-go-d); }
+    .btn-go:active { box-shadow: var(--sh-btn-down); transform: translateY(1px); }
+    /* 아이콘 타일: 단색 + 그림자만으로 살짝 띄움 */
+    .ico-tile { --s: 26px; --b: #2563eb; flex-shrink: 0; display: inline-grid; place-items: center; width: var(--s); height: var(--s);
+      border-radius: calc(var(--s) * 0.32); color: #fff; font-size: calc(var(--s) * 0.58); line-height: 1;
+      background: var(--b); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18), 0 3px 6px -2px rgba(15, 23, 42, 0.22); vertical-align: middle; }
+    .ico-tile.ico-sm { --s: 20px; }
+    .ico-tile.ico-lg { --s: 34px; }
+    .ico-tile.ico-bus { --b: #2563eb; }
+    .ico-tile.ico-rail { --b: #4f46e5; }
+    .ico-tile.ico-walk { --b: #94a3b8; }
+    .ico-tile.ico-pin { --b: #2563eb; }
+    .ico-tile.ico-sun { --b: #f59e0b; }
     .cm-live { color: #e8a000; font-size: 11px; transform: rotate(45deg); display: inline-block; }
     /* 제보 버튼: 누른 것만 색 (여유 초록 · 보통 노랑 · 혼잡 빨강) */
-    .report-opt.is-on[data-level="ok"] { background: #e8f6ec; border-color: #2fa84f; }
+    .report-opt.is-on[data-level="ok"] { background: #f1f5f9; border-color: #64748b; }
     .report-opt.is-on[data-level="mid"] { background: #fff6dc; border-color: #e8a000; }
     .report-opt.is-on[data-level="busy"] { background: #fdeaea; border-color: #e0484f; }
-    .report-opt.is-on[data-level="ok"] i, .report-opt.is-on[data-level="ok"] span { color: #1f7a3a; }
+    .report-opt.is-on[data-level="ok"] i, .report-opt.is-on[data-level="ok"] span { color: #334155; }
     .report-opt.is-on[data-level="mid"] i, .report-opt.is-on[data-level="mid"] span { color: #9a6a00; }
     .report-opt.is-on[data-level="busy"] i, .report-opt.is-on[data-level="busy"] span { color: #b8262d; }
     .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
@@ -152,14 +173,15 @@
     #view-app .font-extrabold { font-weight: 750; }
     #view-app .text-slate-900 { color: #202b3b; }
     #view-app .text-slate-500 { color: #687587; }
-    #view-app > div:first-child { box-shadow: none; border-bottom-color: #e7ebf0; }
-    #app-scroll-content .shadow-sm { box-shadow: 0 1px 3px rgba(25, 40, 60, 0.035); }
+    #view-app > div:first-child { box-shadow: 0 6px 14px -10px rgba(23, 37, 68, 0.22); border-bottom-color: #e7ebf0; }
+    #app-scroll-content .shadow-sm { box-shadow: var(--sh-card); }
+    #tab-pane-1 > div:first-child { box-shadow: var(--sh-float); }
     #app-scroll-content .border-slate-200\/80 { border-color: #e4e9ef; }
-    #app-scroll-content .cm-panel { box-shadow: 0 2px 7px rgba(25, 40, 60, 0.08); }
-    .cm-card { box-shadow: 0 1px 2px rgba(25, 40, 60, 0.04); }
+    #app-scroll-content .cm-panel { box-shadow: var(--sh-float); }
+    .cm-card { box-shadow: var(--sh-card); }
     .cm-min, #brief-leave { font-variant-numeric: tabular-nums; }
     .cm-go { font-weight: 750; }
-    #view-app > nav { border-top-color: #e7ebf0; box-shadow: 0 -2px 8px rgba(25, 40, 60, 0.025); }
+    #view-app > nav { border-top-color: #e7ebf0; box-shadow: 0 -8px 18px -10px rgba(23, 37, 68, 0.18); }
     #view-app button:focus-visible, #view-app input:focus-visible, #view-app select:focus-visible {
       outline: 2px solid #6b8caf; outline-offset: 2px;
     }
@@ -170,7 +192,7 @@
   <!-- ================= TOP SIMULATION CONTROL TOOLBAR ================= -->
   <header class="w-full max-w-lg mb-4 flex flex-col items-center gap-2 z-50">
     <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[11px] font-semibold">
-      <span>⚡</span>
+      <i class="ph-fill ph-navigation-arrow"></i>
       <span>스킵 (SKIP) 캠퍼스 능동형 통학비서</span>
     </div>
     
@@ -181,23 +203,23 @@
     <div class="flex flex-wrap items-center justify-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl shadow-xl backdrop-blur-md">
       <button onclick="showLockScreen()" id="btn-ctrl-lock" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-lock-simple text-amber-400"></i>
-        <span>🔒 잠금화면</span>
+        <span>잠금화면</span>
       </button>
       <button onclick="showIosHomeScreen()" id="btn-ctrl-home" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-device-mobile text-emerald-400"></i>
-        <span>📱 아이폰 홈</span>
+        <span>아이폰 홈</span>
       </button>
       <button onclick="showSkipAppDirect()" id="btn-ctrl-app" class="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white flex items-center gap-1 shadow-md shadow-blue-600/30 tap-press transition-all">
-        <i class="ph-bold ph-lightning text-amber-300"></i>
-        <span>⚡ SKIP 앱</span>
+        <i class="ph-fill ph-navigation-arrow text-white"></i>
+        <span>SKIP 앱</span>
       </button>
       <button onclick="triggerSimulatedPush()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-bell-ringing text-rose-400"></i>
-        <span>🔔 푸시 미리보기</span>
+        <span>푸시 미리보기</span>
       </button>
       <button onclick="openUnivModal()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1 tap-press transition-all">
         <i class="ph-bold ph-buildings text-cyan-400"></i>
-        <span>🏛️ 학교 변경</span>
+        <span>학교 변경</span>
       </button>
     </div>
   </header>
@@ -228,7 +250,7 @@
     <div id="push-notification-banner" class="absolute top-12 left-3 right-3 z-50 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-200/80 transform -translate-y-64 transition-all duration-300 ease-out hidden">
       <div class="flex items-center justify-between text-[11px] text-slate-500 mb-1">
         <div class="flex items-center gap-1.5">
-          <div class="w-4 h-4 rounded-md bg-blue-600 text-white flex items-center justify-center text-[9px] font-black">⚡</div>
+          <span class="ico-tile ico-bus" style="--s:16px;--b:#2563eb"><i class="ph-fill ph-navigation-arrow"></i></span>
           <span class="font-bold text-slate-800">스킵 통학비서</span>
           <span class="text-slate-400">· 방금 전</span>
           <span class="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold">시연 화면</span>
@@ -340,10 +362,10 @@
           <!-- Springboard App Grid (Including SKIP) -->
           <div class="grid grid-cols-4 gap-y-4 gap-x-2 pt-1">
             
-            <!-- PROMINENT '⚡ SKIP' APP ICON -->
+            <!-- PROMINENT 'SKIP' APP ICON -->
             <button onclick="openSkipApp()" class="flex flex-col items-center gap-1 group tap-press">
               <div class="relative w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/30 border border-white/20 group-hover:scale-105 transition-transform">
-                <i class="ph-fill ph-lightning text-3xl text-amber-300"></i>
+                <i class="ph-fill ph-navigation-arrow text-3xl text-white"></i>
                 <!-- Red Notification Badge -->
                 <span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-slate-900 shadow">1</span>
               </div>
@@ -444,13 +466,13 @@
           <!-- Left: SKIP Brand Logo + Selected School Badge -->
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1 font-black text-sm text-blue-600">
-              <span class="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-sm">⚡</span>
+              <span class="ico-tile ico-bus" style="--s:22px;--b:#2563eb"><i class="ph-fill ph-navigation-arrow"></i></span>
               <span class="text-slate-900 font-extrabold text-[15px] tracking-tight">SKIP</span>
             </div>
             <div class="h-3.5 w-px bg-slate-300"></div>
             <!-- School Pill Chip -->
-            <button onclick="openUnivModal()" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 text-[11px] font-bold tap-press transition-colors">
-              <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+            <button onclick="openUnivModal()" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11px] font-bold tap-press transition-colors">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
               <span id="appbar-univ-name">국민대학교</span>
             </button>
           </div>
@@ -460,8 +482,8 @@
             <button onclick="triggerSimulatedPush()" title="푸시 알림 테스트" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs tap-press">
               <i class="ph-bold ph-bell"></i>
             </button>
-            <button onclick="openUnivModal()" class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs flex items-center gap-1 font-bold border border-blue-200/80 tap-press">
-              <i class="ph-bold ph-buildings text-blue-600"></i>
+            <button onclick="openUnivModal()" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs flex items-center gap-1 font-bold border border-slate-200 tap-press">
+              <i class="ph-bold ph-buildings text-slate-500"></i>
               <span>학교변경</span>
             </button>
           </div>
@@ -477,7 +499,7 @@
             <!-- 눈이 덜 피곤하게: 흰 카드, 강조색은 초록 버튼 하나, 숫자 위계로 정보 전달 -->
             <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 text-slate-900">
               <div class="flex items-center justify-between text-[11px] text-slate-500">
-                <span class="font-bold flex items-center gap-1"><i class="ph-bold ph-house-line"></i> 집으로 · <span id="home-card-dest" class="truncate">집 미등록</span></span>
+                <span class="font-bold flex items-center gap-1.5"><span class="ico-tile ico-pin ico-sm"><i class="ph-fill ph-house-line"></i></span> 집으로 · <span id="home-card-dest" class="truncate">집 미등록</span></span>
                 <span id="brief-basis"></span>
               </div>
               <h2 id="brief-title" class="mt-1.5 text-[15px] font-extrabold leading-snug">실시간 경로 계산 중…</h2>
@@ -507,7 +529,7 @@
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span class="ico-tile ico-bus ico-sm"><i class="ph-fill ph-broadcast"></i></span>
                   캠퍼스 주요 출구 실시간 현황
                 </span>
                 <span class="flex items-center gap-1.5"><span class="live-chip">서울시 실시간</span><span id="exit-updated" class="text-[10px] text-slate-400"></span></span>
@@ -522,8 +544,8 @@
                 <div class="font-bold text-slate-800">수업이 일찍 끝나셨나요?</div>
                 <div class="text-[11px] text-slate-500">기다리지 않고 지금 즉시 최적 경로를 브리핑합니다.</div>
               </div>
-              <button onclick="instantDismissal()" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shrink-0 tap-press flex items-center gap-1 text-[11px]">
-                <i class="ph-bold ph-lightning text-amber-300"></i>
+              <button onclick="instantDismissal()" class="px-3.5 py-2 cm-go text-white font-bold shrink-0 tap-press flex items-center gap-1 text-[11px]">
+                <i class="ph-bold ph-timer"></i>
                 <span>즉시 호출</span>
               </button>
             </div>
@@ -535,7 +557,7 @@
             <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
               <div class="flex items-center justify-between mb-2">
                 <h3 class="text-xs font-bold text-slate-800">2026학년도 2학기 시간표</h3>
-                <span class="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                <span class="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                   <i class="ph-bold ph-shield-check"></i> 기기에만 저장
                 </span>
               </div>
@@ -544,7 +566,7 @@
               </p>
 
               <!-- 시간표 사진으로 등록 (Gemini) -->
-              <label class="mb-3 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 text-blue-700 text-xs font-bold cursor-pointer tap-press">
+              <label class="mb-3 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer tap-press">
                 <i class="ph-bold ph-camera"></i> <span id="tt-photo-label">시간표 사진으로 등록</span>
                 <input id="tt-photo" type="file" accept="image/*" class="hidden" onchange="importTimetablePhoto(this)">
               </label>
@@ -571,7 +593,7 @@
 
               <!-- Trigger Inspect Box -->
               <div id="class-inspect-box" class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                <div class="font-bold text-slate-700 mb-0.5">💡 과목을 누르면 통학 계산에 어떻게 쓰이는지 보고, 시간·강의실을 고칠 수 있어요</div>
+                <div class="font-bold text-slate-700 mb-0.5"><i class="ph-duotone ph-lightbulb text-blue-600"></i> 과목을 누르면 통학 계산에 어떻게 쓰이는지 보고, 시간·강의실을 고칠 수 있어요</div>
                 <div class="text-[11px] text-slate-500">시간표와 강의동 정보는 외부 서버에 전송되지 않고 스마트폰 기기 내부(Local)에만 저장됩니다.</div>
               </div>
             </div>
@@ -583,10 +605,10 @@
             <!-- Mode Toggle: Morning Mode (LEFT) vs Dismissal Mode (RIGHT) -->
             <div class="grid grid-cols-2 p-1 bg-slate-200/80 rounded-xl text-xs font-bold">
               <button onclick="switchCommuteSubMode('morning')" id="btn-sub-morning" class="py-1.5 rounded-lg text-slate-600 transition-all tap-press">
-                등교 모드 (가변 알람/환승)
+                <i class="ph-bold ph-sun-horizon"></i> 등교 모드 (가변 알람/환승)
               </button>
               <button onclick="switchCommuteSubMode('dismissal')" id="btn-sub-dismissal" class="py-1.5 rounded-lg bg-white text-blue-700 shadow-sm transition-all tap-press">
-                하교 모드 (정문 정체 회피)
+                <i class="ph-bold ph-house-line"></i> 하교 모드 (정문 정체 회피)
               </button>
             </div>
 
@@ -613,8 +635,8 @@
                         <span class="w-8 text-[10px] text-blue-100 font-bold">도착</span>
                         <i class="ph-fill ph-map-pin text-rose-300"></i>
                         <div class="flex gap-1.5 min-w-0">
-                          <button id="trip-home" onclick="clearTripDest()" class="cm-dest cm-active truncate tap-press">🏠 <span id="trip-home-name"></span></button>
-                          <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="cm-dest truncate tap-press">📍 <span id="trip-other-name">다른 곳</span></button>
+                          <button id="trip-home" onclick="clearTripDest()" class="cm-dest cm-active truncate tap-press"><i class="ph-fill ph-house-line"></i> <span id="trip-home-name"></span></button>
+                          <button id="trip-other" onclick="document.getElementById('trip-search').classList.toggle('hidden')" class="cm-dest truncate tap-press"><i class="ph-bold ph-magnifying-glass"></i> <span id="trip-other-name">다른 곳</span></button>
                         </div>
                       </div>
                       <div id="trip-search" class="hidden mt-2 space-y-1.5">
@@ -628,7 +650,7 @@
                   </div>
                   <!-- 정렬 방식 -->
                   <div class="flex items-start gap-4 px-1">
-                    <button id="rec-mode-fast" onclick="setRecMode('fast')" class="cm-chip cm-active tap-press"><span class="cm-dot"><i class="ph-bold ph-lightning"></i></span>빠른 순</button>
+                    <button id="rec-mode-fast" onclick="setRecMode('fast')" class="cm-chip cm-active tap-press"><span class="cm-dot"><i class="ph-fill ph-timer"></i></span>빠른 순</button>
                     <button id="rec-mode-comfort" onclick="setRecMode('comfort')" class="cm-chip tap-press"><span class="cm-dot"><i class="ph-bold ph-armchair"></i></span>편한 순</button>
                     <button onclick="runRecommend(false, false, true)" class="ml-auto self-center px-4 py-2 cm-go text-xs tap-press flex items-center gap-1">
                       <i class="ph-bold ph-magnifying-glass"></i> 경로 찾기
@@ -662,27 +684,27 @@
             <div id="submode-morning" class="space-y-3 hidden">
               
               <!-- 시간표 연동 등교 알람 (/api/recommend?direction=school) -->
-              <div class="bg-indigo-900 rounded-2xl p-4 text-white shadow-md">
+              <div class="cm-panel rounded-2xl p-4 text-white">
                 <div class="flex items-center justify-between text-xs mb-2">
-                  <span class="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold">
-                    ⏰ 시간표 연동 등교 알람
+                  <span class="cm-dest inline-flex items-center gap-1.5">
+                    <i class="ph-fill ph-alarm"></i> 시간표 연동 등교 알람
                   </span>
-                  <span id="am-class-day" class="text-amber-300 font-extrabold"></span>
+                  <span id="am-class-day" class="text-blue-100 font-extrabold"></span>
                 </div>
                 <div id="am-alarm" class="text-lg font-black">계산 중…</div>
-                <p id="am-reason" class="text-xs text-indigo-100 mt-1 leading-relaxed"></p>
-                <div class="mt-2.5 flex items-center gap-1.5 text-[11px] text-indigo-100">
+                <p id="am-reason" class="text-xs text-blue-100 mt-1 leading-relaxed"></p>
+                <div class="mt-2.5 flex items-center gap-1.5 text-[11px] text-blue-100">
                   <span>준비 시간</span>
-                  <input id="am-prep" type="number" min="0" max="180" step="5" class="w-14 rounded-md bg-white/15 border border-white/20 px-1.5 py-0.5 text-white">
+                  <input id="am-prep" type="number" min="0" max="180" step="5" class="w-14 rounded-md border border-white/20 px-1.5 py-0.5 text-white" style="background:var(--cm-panel-2)">
                   <span>분</span>
-                  <button onclick="loadMorning()" class="ml-auto px-2.5 py-1 bg-white/15 hover:bg-white/25 rounded-lg font-bold tap-press">다시 계산</button>
+                  <button onclick="loadMorning()" class="ml-auto px-3.5 py-1.5 cm-go text-white tap-press flex items-center gap-1"><i class="ph-bold ph-arrow-clockwise"></i> 다시 계산</button>
                 </div>
               </div>
 
               <!-- 등교 경로 후보 -->
               <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
                 <div class="px-3.5 py-2.5 border-b border-slate-100 flex items-center justify-between text-xs">
-                  <span id="am-routes-title" class="font-extrabold text-slate-900">등교 경로</span>
+                  <span class="flex items-center gap-1.5 font-extrabold text-slate-900"><span class="ico-tile ico-pin ico-sm"><i class="ph-fill ph-graduation-cap"></i></span><span id="am-routes-title">등교 경로</span></span>
                   <span id="am-routes-meta" class="text-[10px] text-slate-400"></span>
                 </div>
                 <div id="am-routes" class="divide-y divide-slate-100 text-xs"></div>
@@ -745,8 +767,8 @@
 
                 <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                   <div class="flex items-center justify-between font-bold text-slate-800">
-                    <span class="flex items-center gap-1 text-emerald-600">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 정문 셔틀 승차장
+                    <span class="flex items-center gap-1 text-slate-600">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> 정문 셔틀 승차장
                     </span>
                     <span class="text-[10px] text-slate-400 font-normal">5분 전</span>
                   </div>
@@ -771,8 +793,8 @@
                 <div id="extra-feed-container" class="space-y-2 hidden">
                   <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                     <div class="flex items-center justify-between font-bold text-slate-800">
-                      <span class="flex items-center gap-1 text-blue-600">
-                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 길음역 셔틀 승차홈
+                      <span class="flex items-center gap-1 text-slate-600">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> 길음역 셔틀 승차홈
                       </span>
                       <span class="text-[10px] text-slate-400 font-normal">아침 제보</span>
                     </div>
@@ -849,8 +871,8 @@
                   </div>
                   <div class="text-[10px] text-slate-400 mt-0.5">하교 경로에서 '이 경로로 출발'을 누르고 걸으면, 정류장 근처에서 GPS로 자동 측정해 내 걸음에 맞춰요.</div>
                 </div>
-                <div class="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800 flex items-start gap-1.5">
-                  <i class="ph-bold ph-shield-check text-base text-emerald-600 shrink-0 mt-0.5"></i>
+                <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-700 flex items-start gap-1.5">
+                  <i class="ph-bold ph-shield-check text-base text-slate-500 shrink-0 mt-0.5"></i>
                   <span>개인정보 보호: 동/호수는 넣지 마세요. 집은 좌표로만 기기에 저장되고, 길찾기할 때만 약 100m 단위로 서버에 보내집니다.</span>
                 </div>
               </div>
@@ -859,12 +881,12 @@
             <!-- Settings Toggles -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3 text-xs">
               <div class="font-bold text-slate-800">스마트 알림 환경설정</div>
-              <div class="p-2.5 bg-blue-50 border border-blue-100 rounded-xl space-y-2">
-                <div class="font-bold text-blue-900">휴대폰 알림</div>
-                <div id="push-status" class="text-[11px] text-blue-800"></div>
-                <button id="push-enable" onclick="enablePush()" class="w-full py-1.5 bg-blue-600 text-white rounded-lg font-bold tap-press">알림 켜기</button>
+              <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div class="font-bold text-slate-900">휴대폰 알림</div>
+                <div id="push-status" class="text-[11px] text-slate-600"></div>
+                <button id="push-enable" onclick="enablePush()" class="btn-go w-full py-2 rounded-xl font-bold tap-press">알림 켜기</button>
                 <div id="push-controls" class="hidden flex gap-2">
-                  <button onclick="sendTestPush()" class="flex-1 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg font-bold tap-press">테스트 알림</button>
+                  <button onclick="sendTestPush()" class="flex-1 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold tap-press">테스트 알림</button>
                   <button onclick="disablePush()" class="flex-1 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold tap-press">알림 끄기</button>
                 </div>
               </div>
@@ -887,16 +909,16 @@
 
         <!-- 걷는 중: 정류장에 도착하면 '도착'을 눌러 내 걸음 속도 측정 -->
         <!-- 실시간 길안내: 지금 할 일, 남은 거리, 음성 켜기/끄기 -->
-        <div id="nav-bar" class="hidden text-white px-3.5 py-2.5 shrink-0 z-20 text-xs" style="background:var(--cm-green)">
+        <div id="nav-bar" class="hidden text-white px-3.5 py-2.5 shrink-0 z-20 text-xs" style="background:var(--cm-go)">
           <div class="flex items-center gap-2">
             <i class="ph-bold ph-navigation-arrow text-white text-base"></i>
             <div class="flex-1 min-w-0">
-              <div class="text-[10px] text-green-50"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
+              <div class="text-[10px] text-blue-100"><span id="nav-step"></span> · <span id="nav-dist">위치 확인 중</span></div>
               <div id="nav-label" class="font-extrabold truncate"></div>
             </div>
             <button id="nav-mute" onclick="toggleNavMute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="음성 켜기/끄기"></button>
             <button onclick="advanceNav(true)" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press">다음</button>
-            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-green-d)">종료</button>
+            <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-go-d)">종료</button>
           </div>
           <div id="nav-say" class="mt-1 text-[11px] text-white leading-snug"></div>
         </div>
@@ -1165,7 +1187,7 @@
       document.getElementById('view-ios-homescreen').classList.remove('hidden');
       document.getElementById('view-app').classList.add('hidden');
       updateStatusBarTheme('dark');
-      triggerToast('아이폰 홈화면입니다. ⚡ SKIP 앱을 탭해보세요!');
+      triggerToast('아이폰 홈화면입니다. SKIP 앱을 탭해보세요!');
     }
 
     function showSkipAppDirect() {
@@ -1190,7 +1212,7 @@
         document.getElementById('view-app').classList.remove('hidden');
         updateStatusBarTheme('light');
         switchTab(1);
-        triggerToast('⚡ SKIP 캠퍼스 에이전트가 실행되었습니다.');
+        triggerToast('SKIP 캠퍼스 에이전트가 실행되었습니다.');
       }, 180);
     }
 
@@ -1248,7 +1270,7 @@
 
     // ---------------- 실시간 출발 현황 (/api/board) ----------------
     const CONGESTION_STYLE = {
-      '여유': 'bg-emerald-100 text-emerald-700',
+      '여유': 'bg-slate-100 text-slate-600',
       '보통': 'bg-amber-100 text-amber-700',
       '혼잡': 'bg-rose-100 text-rose-700',
       '매우혼잡': 'bg-rose-600 text-white',
@@ -1349,11 +1371,18 @@
       return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
     }
 
+    // 도보·버스·지하철 입체 아이콘 타일
+    const LEG_ICONS = { walk: ['ico-walk', 'ph-person-simple-walk'], bus: ['ico-bus', 'ph-bus'], subway: ['ico-rail', 'ph-subway'] };
+    function legIcon(type, size = 'ico-sm') {
+      const [tone, glyph] = LEG_ICONS[type] || LEG_ICONS.bus;
+      return `<span class="ico-tile ${size} ${tone}"><i class="ph-fill ${glyph}"></i></span>`;
+    }
+
     function renderLeg(l) {
       if (l.type === 'walk') {
-        return `<div class="text-slate-500">🚶 도보 ${l.minutes}분${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.estimated ? ' (직선거리 추정)' : ''}</div>`;
+        return `<div class="text-slate-500">${legIcon('walk')} 도보 ${l.minutes}분${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.estimated ? ' (직선거리 추정)' : ''}</div>`;
       }
-      const icon = l.type === 'bus' ? '🚌' : '🚇';
+      const icon = legIcon(l.type === 'bus' ? 'bus' : 'subway');
       const name = l.type === 'bus' ? `${escapeHtml(l.route)}번` : escapeHtml(l.line);
       const wait = `${Math.round(l.waitSec / 60)}분 대기${l.realtime ? '' : '(추정)'}`;
       const crowd = l.type === 'bus'
@@ -1361,7 +1390,7 @@
         : l.congestion
           ? `${congestionBadge({ seconds: 0, congestion: l.congestion })} <span>평소 ${Math.round(l.congestionPct)}%</span>${l.peak ? ` <span>· ${escapeHtml(l.peak.station)}에서 ${Math.round(l.peak.pct)}%(${l.peak.level})</span>` : ''}`
           : '';
-      const seat = l.seatLikely === true ? '<span class="text-emerald-700 font-bold">착석 가능</span>'
+      const seat = l.seatLikely === true ? '<span class="text-slate-700 font-bold">착석 가능</span>'
         : l.seatLikely === false ? '<span class="text-rose-600 font-bold">서서 감</span>' : '';
       const miss = l.missProb >= 0.4 ? `<span class="text-rose-600 font-bold">못 탈 확률 ${Math.round(l.missProb * 100)}%</span>` : '';
       return `
@@ -1388,7 +1417,7 @@
       document.getElementById('home-q').focus();
     }
 
-    const REGISTER_HOME_BUTTON = '<button onclick="goRegisterHome()" class="mt-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold tap-press">집 등록하러 가기</button>';
+    const REGISTER_HOME_BUTTON = '<button onclick="goRegisterHome()" class="btn-go mt-2 px-3.5 py-2 rounded-xl text-xs font-bold tap-press">집 등록하러 가기</button>';
 
     // 홈 카드·내 정보·하교 탭의 집 이름 표시
     function renderHomeName() {
@@ -1564,7 +1593,7 @@
     // ODsay 버스 type: 11 간선, 12 지선, 13 순환, 14 광역, 15 급행, 3 마을
     const BUS_COLORS = { 11: '#3D5BAB', 12: '#5BB025', 13: '#F2B70A', 14: '#E60012', 15: '#E60012', 3: '#81BF48' };
     const BUS_TYPE_NAMES = { 11: '간선', 12: '지선', 13: '순환', 14: '광역', 15: '급행', 3: '마을' };
-    const LEVEL_COLORS = { '여유': '#10b981', '보통': '#fbbf24', '혼잡': '#f43f5e', '매우혼잡': '#9f1239' };
+    const LEVEL_COLORS = { '여유': '#94a3b8', '보통': '#fbbf24', '혼잡': '#f43f5e', '매우혼잡': '#9f1239' };
 
     function legColor(l) {
       if (l.type === 'walk') return '#94a3b8';
@@ -1644,7 +1673,7 @@
             ${live.length ? `<div class="text-[11px] text-slate-700">${live.join(' · ')}</div>` : ''}
             ${l.ended || l.lastVehicle || l.lastRisk ? `<div class="text-[11px] font-bold ${l.ended ? 'text-rose-600' : 'text-amber-600'}">${escapeHtml(l.notes.find((n) => /막차|운행/.test(n)) || '막차')}</div>` : ''}
             <div class="text-[10px] text-slate-500">대기 ${Math.round(l.waitSec / 60)}분${l.realtime ? ' (실시간)' : l.timetable ? ' (시간표)' : ' (추정)'}${l.extraWaitSec ? ` + 만차 대비 ${Math.round(l.extraWaitSec / 60)}분` : ''} · ${l.rideMin}분 탑승
-              ${l.seatLikely === true ? ' · <span class="text-emerald-700 font-bold">착석 가능</span>' : l.seatLikely === false ? ' · <span class="text-rose-600 font-bold">서서 감</span>' : ''}</div>
+              ${l.seatLikely === true ? ' · <span class="text-slate-700 font-bold">착석 가능</span>' : l.seatLikely === false ? ' · <span class="text-rose-600 font-bold">서서 감</span>' : ''}</div>
             ${next}
             ${stationCongestionBars(l)}
             ${stops}
@@ -1666,7 +1695,7 @@
       const items = r.legs.map((l) => l.type === 'walk'
         ? `<li class="relative pl-5 text-[11px] text-slate-500">
              <span class="absolute left-0.5 top-1 w-2 h-2 rounded-full bg-slate-300"></span>
-             🚶 도보 ${l.minutes}분${l.distanceM ? ` · ${l.distanceM}m` : ''}${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.uphill ? ` (오르막 ×${l.uphill})` : ''}${l.estimated ? ' (직선거리 추정)' : ''}
+             ${legIcon('walk')} 도보 ${l.minutes}분${l.distanceM ? ` · ${l.distanceM}m` : ''}${l.to ? ` → ${escapeHtml(l.to)}` : ''}${l.uphill ? ` (오르막 ×${l.uphill})` : ''}${l.estimated ? ' (직선거리 추정)' : ''}
            </li>`
         : rideDetail(l)).join('');
       return `
@@ -1813,7 +1842,7 @@
       if (!hasHome() && !tripDest) {
         // 도착지가 없으면 그 자리에서 바로 검색창을 열어 줌 (같은 안내만 다시 그리면 눌러도 반응 없는 것처럼 보임)
         meta.textContent = '';
-        box.innerHTML = `<div class="p-3 text-slate-600">어디로 갈지 먼저 정해 주세요. 위의 '📍 다른 곳'을 눌러 가려는 곳을 검색하거나, 집을 등록하면 다음부터 바로 찾아요.<br>${REGISTER_HOME_BUTTON}</div>`;
+        box.innerHTML = `<div class="p-3 text-slate-600">어디로 갈지 먼저 정해 주세요. 위의 '다른 곳'을 눌러 가려는 곳을 검색하거나, 집을 등록하면 다음부터 바로 찾아요.<br>${REGISTER_HOME_BUTTON}</div>`;
         if (byUser) {
           document.getElementById('trip-search').classList.remove('hidden');
           document.getElementById('trip-q').focus();
@@ -1924,11 +1953,11 @@
       }
     }
 
-    // 홈 카드용 경로 요약: 🚶 4분 › 🚌 7211 › 🚇 4호선
+    // 홈 카드용 경로 요약: 도보 4분 · 7211 · 4호선
     function routeChips(r) {
       return r.legs.map((l) => l.type === 'walk'
-        ? `<span class="flex items-center gap-0.5 text-slate-500"><i class="ph-bold ph-person-simple-walk"></i>${l.minutes}분</span>`
-        : `<span class="px-1.5 py-0.5 rounded text-white" style="background:${legColor(l)}">${escapeHtml(rideName(l))}</span>`)
+        ? `<span class="flex items-center gap-1 text-slate-500">${legIcon('walk')}${l.minutes}분</span>`
+        : `<span class="px-1.5 py-0.5 rounded text-white inline-flex items-center gap-1" style="background:${legColor(l)};box-shadow:0 1px 2px rgba(15,23,42,.2),0 3px 6px -2px rgba(15,23,42,.25)"><i class="ph-fill ${l.type === 'bus' ? 'ph-bus' : 'ph-subway'}"></i>${escapeHtml(rideName(l))}</span>`)
         .join('<span class="text-slate-300">·</span>');
     }
 
@@ -1979,7 +2008,7 @@
       const box = document.getElementById('exit-status');
       const row = (label, text, tone = 'slate') => `
         <div class="p-2.5 rounded-xl bg-${tone}-50 border border-${tone}-100 text-xs">
-          <div class="font-bold text-slate-800">${label}</div>
+          <div class="font-bold text-slate-800 flex items-center gap-1.5">${label}</div>
           <div class="text-[11px] text-slate-600 mt-0.5">${text}</div>
         </div>`;
       try {
@@ -2001,9 +2030,9 @@
           return Object.entries(dirs).map(([d, t]) => `<b>${escapeHtml(d)}</b> ${fmtArrival(t.seconds, t.message)}`).join(' · ') || '도착 정보 없음';
         };
         box.innerHTML = [
-          row('🚍 정문 국민대앞 · 길음·신설동 방면', busText(byId['main-gate-east'])),
-          row('🚍 정문 국민대학교앞 · 광화문 방면', busText(byId['main-gate-west'])),
-          row('🚇 후문 → 우이신설선 정릉역', subwayText(byId['back-gate-subway'])),
+          row(`${legIcon('bus')}<span>정문 국민대앞 · 길음·신설동 방면</span>`, busText(byId['main-gate-east'])),
+          row(`${legIcon('bus')}<span>정문 국민대학교앞 · 광화문 방면</span>`, busText(byId['main-gate-west'])),
+          row(`${legIcon('subway')}<span>후문 → 우이신설선 정릉역</span>`, subwayText(byId['back-gate-subway'])),
         ].join('');
         document.getElementById('exit-updated').textContent = `${hhmm(board.updatedAt)} 갱신`;
       } catch (e) {
@@ -2304,7 +2333,7 @@
         const leaveBy = new Date(top.leaveBy);
         const alarmAt = new Date(leaveBy.getTime() - prep * 60000);
         schedulePush('morning', alarmAt.getTime(), { direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) }, leaveBy.getTime());
-        alarm.innerHTML = `${dayLabel} <span class="text-cyan-300">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
+        alarm.innerHTML = `${dayLabel} <span class="text-white underline decoration-white/40 underline-offset-4">${hhmm(alarmAt.toISOString())}</span> 알람 · ${hhmm(top.leaveBy)} 출발`;
         const live = top.legs.some((l) => l.realtime);
         reason.textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
           + (live ? ' 실시간 도착 정보가 반영됐어요.' : ' 출발이 가까워지면 실시간 도착 정보로 다시 계산돼요. 지금은 평소 배차·혼잡도 기준이에요.');
@@ -2449,10 +2478,10 @@
       const box = document.getElementById('class-inspect-box');
       box.innerHTML = `
         <div class="flex items-center justify-between font-bold text-slate-800 mb-1">
-          <span class="flex items-center gap-1.5 text-blue-600">
+          <span class="flex items-center gap-1.5 text-slate-600">
             <i class="ph-bold ph-bell-ringing"></i> ${escapeHtml(c.name)}
           </span>
-          <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
+          <span class="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono">${DAY_NAMES[c.day]} ${c.start}-${c.end}</span>
         </div>
         <div class="text-[11px] text-slate-600">
           강의실: <strong>${escapeHtml(c.room || '-')}</strong><br>${role}
@@ -2545,13 +2574,13 @@
 
       const list = document.getElementById('report-feed-list');
       const newReport = document.createElement('div');
-      newReport.className = 'p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs';
+      newReport.className = 'p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs';
       newReport.innerHTML = `
         <div class="flex items-center justify-between font-bold text-slate-800">
-          <span class="flex items-center gap-1 text-blue-600">
-            <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span> ${escapeHtml(stop.name)}
+          <span class="flex items-center gap-1 text-slate-600">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span> ${escapeHtml(stop.name)}
           </span>
-          <span class="text-[10px] text-blue-600 font-semibold">방금 전 (내 제보)</span>
+          <span class="text-[10px] text-slate-500 font-semibold">방금 전 (내 제보)</span>
         </div>
         <p class="text-[11px] text-slate-700 mt-1">
           현장 상태: "${escapeHtml(statusText)}" 제보가 성공적으로 등록되었습니다.
@@ -2604,7 +2633,7 @@
       filtered.forEach(u => {
         const isSelected = u.id === currentUniv.id;
         const div = document.createElement('div');
-        div.className = `p-2.5 rounded-xl border flex items-center justify-between cursor-pointer tap-press transition-colors ${isSelected ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold' : 'bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100'}`;
+        div.className = `p-2.5 rounded-xl border flex items-center justify-between cursor-pointer tap-press transition-colors ${isSelected ? 'bg-slate-100 border-slate-400 text-slate-900 font-bold' : 'bg-slate-50 border-slate-200/80 text-slate-800 hover:bg-slate-100'}`;
         div.innerHTML = `
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full" style="background-color: ${u.badgeColor}"></span>
@@ -2657,7 +2686,7 @@
         if (!res.ok) throw new Error(results.error);
         placeResults[listId] = results;
         list.innerHTML = results.map((r, i) => `
-          <button onclick="${pickFn}(${i})" class="w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-blue-50 tap-press">
+          <button onclick="${pickFn}(${i})" class="w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-slate-50 tap-press">
             <div class="font-bold text-slate-800 truncate">${escapeHtml(r.name)}</div>
             <div class="text-[10px] text-slate-500 truncate">${escapeHtml(r.address)}</div>
           </button>`).join('') || '<div class="text-[11px] text-slate-500">결과가 없어요. 도로명 주소로 다시 찾아 주세요.</div>';
