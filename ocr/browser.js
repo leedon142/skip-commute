@@ -3,8 +3,7 @@
 import { createOcr } from './paddle.js';
 import { parseTimetable } from './timetable.js';
 
-// onnxruntime-web 1.20.1 (vendor/ort에 복사해 둠, CDN 없이)
-const ORT = '/vendor/ort/';
+const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 const MAX_SIDE = 1600;
 
 let engine = null;
