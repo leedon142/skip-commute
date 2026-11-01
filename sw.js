@@ -1,8 +1,14 @@
 // 앱 화면만 저장해 두고 오프라인일 때 보여줌. 실시간 데이터(/api/)는 항상 네트워크로.
-const CACHE = 'skip-shell-v2';
+const CACHE = 'skip-shell-v4';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
+    '/', '/manifest.webmanifest', '/icons/icon-192.png',
+    // 화면 스타일·아이콘·글꼴 (CDN 없이 vendor/에서)
+    '/vendor/tailwind.css', '/vendor/phosphor/bold.css', '/vendor/phosphor/fill.css',
+    '/vendor/phosphor/duotone.css', '/vendor/phosphor/light.css',
+    '/vendor/phosphor/Phosphor-Bold.woff2', '/vendor/phosphor/Phosphor-Fill.woff2', '/vendor/phosphor/Phosphor-Duotone.woff2', '/vendor/phosphor/Phosphor-Light.woff2', '/vendor/pretendard/PretendardVariable.woff2',
+  ])));
   self.skipWaiting();
 });
 
