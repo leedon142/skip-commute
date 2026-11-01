@@ -11,9 +11,20 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="SKIP">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- 설치 앱(Capacitor)의 API 서버 주소. 웹은 비워 두고 상대 경로(/api/…), 앱 빌드(scripts/build-mobile.mjs)가 채움 -->
+  <meta name="skip-api-base" content="">
   <script>
-    // 폰(홈 화면에 추가한 앱, 또는 폰 브라우저)에서는 데모용 아이폰 틀 없이 앱만 전체 화면으로. ?app 으로 PC에서도 확인 가능
-    const APP_MODE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+    // 설치 앱(안드로이드 APK) 안에서 실행 중인지
+    const NATIVE = !!window.Capacitor?.isNativePlatform?.();
+    // 앱의 화면은 기기 안 파일이라 /api/ 요청만 서버 주소로 보냄 (OCR 모델·글꼴 등 나머지는 기기 안에서 읽음)
+    if (NATIVE) {
+      const API_BASE = document.querySelector('meta[name="skip-api-base"]').content.replace(/\/$/, '');
+      const nativeFetch = window.fetch;
+      window.fetch = (input, init) => nativeFetch(typeof input === 'string' && input.startsWith('/api/') ? API_BASE + input : input, init);
+    }
+
+    // 폰(홈 화면에 추가한 앱, 설치 앱, 폰 브라우저)에서는 데모용 아이폰 틀 없이 앱만 전체 화면으로. ?app 으로 PC에서도 확인 가능
+    const APP_MODE = NATIVE || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
       || matchMedia('(max-width: 520px)').matches || new URLSearchParams(location.search).has('app');
     if (APP_MODE) document.documentElement.classList.add('app-mode');
 
@@ -21,7 +32,8 @@
     let TRACK = true;
     try {
       if (new URLSearchParams(location.search).has('me')) localStorage.setItem('skip.noTrack', '1');
-      TRACK = !localStorage.getItem('skip.noTrack') && location.protocol === 'https:';
+      // 설치 앱은 Vercel 통계 스크립트가 없음
+      TRACK = !NATIVE && !localStorage.getItem('skip.noTrack') && location.protocol === 'https:';
     } catch {}
     if (TRACK) {
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -1021,6 +1033,14 @@
     let homePlace = (() => { try { return JSON.parse(localStorage.getItem('skip.homePlace')); } catch { return null; } })();
     let isFeedExpanded = false;
 
+    // 설치 앱의 뒤로가기 버튼: 다른 탭이면 홈으로, 홈이면 앱을 내림 (기본 동작은 어느 탭에서든 앱이 꺼짐)
+    if (NATIVE) {
+      window.Capacitor.Plugins.App?.addListener('backButton', () => {
+        if (activeTab !== 1) switchTab(1);
+        else window.Capacitor.Plugins.App.minimizeApp();
+      });
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       renderUniversityList();
       applyUnivContext(currentUniv);
@@ -1033,7 +1053,8 @@
         showLockScreen();
       }
       if (new URLSearchParams(location.search).has('me')) setTimeout(() => triggerToast('이 기기는 사용 통계에서 빠져요.'), 800);
-      if ('serviceWorker' in navigator && window.isSecureContext) {
+      // 설치 앱은 화면 파일이 이미 기기 안에 있어서 서비스 워커(오프라인 캐시·웹 푸시) 안 씀
+      if (!NATIVE && 'serviceWorker' in navigator && window.isSecureContext) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
         // 앱이 열려 있을 때 알림을 누르면 서비스 워커가 이동할 화면을 알려줌
         navigator.serviceWorker.addEventListener('message', (e) => {
@@ -1441,6 +1462,7 @@
     }
 
     function pushSupport() {
+      if (NATIVE) return '설치 앱 알림은 아직 준비 중이에요. 웹(skip-commute.vercel.app)에서는 켤 수 있어요.';
       if (!window.isSecureContext) return 'https 주소(배포본)에서만 알림을 쓸 수 있어요.';
       const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {

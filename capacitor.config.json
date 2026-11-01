@@ -1,0 +1,13 @@
+{
+  "appId": "app.skipcommute.demo",
+  "appName": "SKIP",
+  "webDir": "mobile/www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

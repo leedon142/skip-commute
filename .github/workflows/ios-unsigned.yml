@@ -1,0 +1,38 @@
+# 시연용 iOS 앱: Mac 없이 GitHub의 macOS에서 서명 안 한 .ipa를 만듦
+# 받은 .ipa는 PC의 Sideloadly가 무료 Apple ID로 서명해서 아이폰에 설치 (7일마다 다시 설치)
+name: iOS unsigned build
+
+on:
+  push:
+    branches: [feat/android-app]
+    paths: ['index.html', 'vendor/**', 'ocr/**', 'ios/**', 'capacitor.config.json', 'package*.json', 'scripts/build-mobile.mjs', '.github/workflows/ios-unsigned.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run mobile:build
+      - run: npx cap sync ios
+      - name: 서명 없이 빌드
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: .ipa로 묶기
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qr SKIP-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SKIP-unsigned-ipa
+          path: SKIP-unsigned.ipa
+          retention-days: 7

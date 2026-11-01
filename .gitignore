@@ -6,3 +6,6 @@ data/out/
 data/raw/
 data/.odsay-cache.json
 data/.*.json
+
+# 설치 앱 빌드 결과 (scripts/build-mobile.mjs, Gradle)
+mobile/www/
