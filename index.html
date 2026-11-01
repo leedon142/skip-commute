@@ -3180,6 +3180,82 @@
     }
     function saveNav(nav) {
       try { nav ? localStorage.setItem(NAV_KEY, JSON.stringify(nav)) : localStorage.removeItem(NAV_KEY); } catch {}
+      // 설치 앱: 웹이 바꾼 예상 시각·안내 문구를 길안내 서비스에도 (서비스는 단계를 뒤로 돌리지 않음)
+      if (NativeNav && nav) NativeNav.update({ steps: nativeSteps(nav), idx: nav.idx }).catch(() => {});
+    }
+
+    // ---------------- 설치 앱(안드로이드): 길안내 서비스가 단계·음성·잠금화면 알림을 맡음 ----------------
+    // 앱을 닫거나 화면을 꺼도 서비스가 위치로 단계를 넘기고 말함. 웹은 화면이 켜져 있을 때 실시간 정보(지하철 시각 보정,
+    // 갈아탈 버스, 우회 제안)를 더해 말하고, 바뀐 시각을 서비스에 넘김. 웹 쪽 GPS·시각 판정은 앱에선 끔 (이중 실행 방지)
+    const NativeNav = NATIVE ? window.Capacitor.Plugins.SkipNavigation : null;
+
+    function nativeSteps(nav) {
+      return nav.steps.map((st) => ({
+        label: st.label, say: st.say, target: st.target ?? null, radius: st.radius,
+        timeAt: st.timeAt ?? null, underground: !!st.underground,
+        // 웹이 실시간 정보를 붙여 말하는 단계: 서비스는 웹이 말할 때까지 잠깐 기다렸다가 못 들으면 기본 문구로
+        rich: !!(st.subway || st.nextBus),
+      }));
+    }
+
+    // 안내 시작·경로 변경: 앱은 서비스를 (다시) 시작하고 서비스가 첫 안내를 말함, 웹은 바로 말함
+    function beginNav(nav, firstSay) {
+      if (!NativeNav) return speak(firstSay);
+      const steps = nativeSteps(nav);
+      steps[nav.idx].say = firstSay;
+      NativeNav.start({ steps, idx: nav.idx, dest: nav.dest, muted: navMuted() })
+        .then((r) => { if (!r.location) triggerToast('위치 권한이 없어서 예상 시각으로만 안내해요.'); })
+        .catch(() => speak(firstSay));
+    }
+
+    if (NativeNav) {
+      NativeNav.addListener('step', ({ idx }) => {
+        const nav = navState();
+        if (!nav || idx <= nav.idx || idx >= nav.steps.length) return;
+        nav.idx = idx;
+        saveNav(nav);
+        const step = nav.steps[idx];
+        if (step.subway) retimeSubway(idx);
+        else if (step.nextBus) briefTransfer(idx);
+        if (step.watch) watchBus();
+        renderNavAlert(nav);
+        renderNavBar(nav, null);
+      });
+      NativeNav.addListener('location', ({ lat, lng, dist }) => {
+        navLastFix = Date.now();
+        navLastPos = { lat, lng };
+        const nav = navState();
+        if (nav) renderNavBar(nav, dist);
+      });
+      NativeNav.addListener('finished', ({ reason }) => {
+        const nav = navState();
+        if (!nav) return;
+        clearInterval(navTrainTimer);
+        clearInterval(navWatchTimer);
+        saveNav(null);
+        resumeNavigation();
+        if (reason === 'arrived') {
+          track('길안내-도착');
+          triggerToast(`${nav.dest} 도착 · 길안내를 마쳤어요.`);
+        } else {
+          triggerToast('길안내를 종료했어요.');
+        }
+      });
+    }
+
+    // 앱을 다시 열었을 때: 서비스가 앞서간 단계를 맞추고, 서비스가 없으면(시스템이 정리함) 지금 단계부터 다시 시작
+    async function syncNativeNav() {
+      const nav = navState();
+      if (!NativeNav || !nav) return;
+      const st = await NativeNav.getState().catch(() => null);
+      if (!st) return;
+      if (!st.running) return beginNav(nav, nav.steps[nav.idx].say);
+      if (st.idx > nav.idx) {
+        nav.idx = Math.min(st.idx, nav.steps.length - 1);
+        saveNav(nav);
+        renderNavBar(nav, null);
+        renderNavAlert(nav);
+      }
     }
     function navMuted() {
       try { return localStorage.getItem('skip.navMute') === '1'; } catch { return false; }
@@ -3187,6 +3263,8 @@
 
     function speak(text) {
       navigator.vibrate?.(200);
+      // 설치 앱: 서비스의 음성 (음악은 잠깐 줄였다가 돌려줌, 음소거는 서비스가 지킴)
+      if (NativeNav) return NativeNav.speak({ text }).catch(() => {});
       if (navMuted() || !('speechSynthesis' in window)) return;
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
@@ -3276,9 +3354,9 @@
       saveNav(nav);
       // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
       if (!morning && r.legs[0]?.type === 'walk' && r.legs[0].to) startWalkTrip(i, true);
-      speak(nav.steps[0].say);
+      beginNav(nav, nav.steps[0].say);
       resumeNavigation();
-      triggerToast('길안내를 시작했어요. 화면을 켜 둔 채 걸어 주세요.');
+      triggerToast(NativeNav ? '길안내를 시작했어요. 앱을 닫거나 화면을 꺼도 음성으로 알려 드려요.' : '길안내를 시작했어요. 화면을 켜 둔 채 걸어 주세요.');
     }
 
     function resumeNavigation() {
@@ -3305,9 +3383,9 @@
       renderNavBar(nav, null);
       const rideIdx = nav.steps[nav.idx]?.subway ? nav.idx : nav.steps[nav.idx - 1]?.subway ? nav.idx - 1 : -1;
       if (rideIdx >= 0 && nav.steps[rideIdx].trainNo) trackSubway(rideIdx);
-      // 안내 중엔 화면이 꺼지지 않게 (지원하는 브라우저만)
-      navigator.wakeLock?.request('screen').then((l) => { navWakeLock = l; }).catch(() => {});
-      if (navigator.geolocation) {
+      // 안내 중엔 화면이 꺼지지 않게 (지원하는 브라우저만). 설치 앱은 서비스가 위치를 보므로 꺼져도 됨
+      if (!NativeNav) navigator.wakeLock?.request('screen').then((l) => { navWakeLock = l; }).catch(() => {});
+      if (navigator.geolocation && !NativeNav) {
         navWatchId = navigator.geolocation.watchPosition((p) => {
           navLastFix = Date.now();
           const here = { lat: p.coords.latitude, lng: p.coords.longitude };
@@ -3333,7 +3411,7 @@
         const step = cur?.steps[cur.idx];
         if (cur?.offer && Date.now() - cur.offer.at > REROUTE_OFFER_MS) declineReroute();
         if (step?.planAt) maybeReroute(Date.now() - step.planAt);
-        if (!step?.timeAt) return;
+        if (!step?.timeAt || NativeNav) return;
         const gpsStale = Date.now() - navLastFix > NAV_GPS_STALE_MS;
         if ((step.underground || gpsStale || !step.target) && Date.now() >= step.timeAt) advanceNav();
       }, 5000);
@@ -3396,7 +3474,7 @@
       nav.offer = null;
       saveNav(nav);
       clearInterval(navTrainTimer);
-      speak(nav.steps[0].say);
+      beginNav(nav, nav.steps[0].say);
       resumeNavigation();
     }
 
@@ -3423,6 +3501,8 @@
     function advanceNav(manual = false) {
       const nav = navState();
       if (!nav) return;
+      // 설치 앱: 단계는 서비스가 넘기고 'step' 이벤트로 알려 줌
+      if (NativeNav) return manual && NativeNav.next();
       nav.idx += 1;
       if (nav.idx >= nav.steps.length) {
         speak(`${nav.dest}에 도착했어요. 길안내를 마칠게요.`);
@@ -3560,7 +3640,7 @@
         alts: (nav.alts || []).filter((a) => a.label !== alt.label),
       };
       saveNav(next);
-      speak(`경로를 바꿨어요. ${next.steps[0].say}`);
+      beginNav(next, `경로를 바꿨어요. ${next.steps[0].say}`);
       resumeNavigation();
     }
 
@@ -3643,6 +3723,7 @@
     }
 
     function stopNavigation() {
+      NativeNav?.stop();
       clearInterval(navTrainTimer);
       clearInterval(navWatchTimer);
       saveNav(null);
@@ -3654,6 +3735,7 @@
     function toggleNavMute() {
       try { localStorage.setItem('skip.navMute', navMuted() ? '0' : '1'); } catch {}
       if (navMuted()) speechSynthesis?.cancel?.();
+      NativeNav?.setMuted({ muted: navMuted() });
       const nav = navState();
       if (nav) renderNavBar(nav, null);
     }
@@ -3687,6 +3769,7 @@
     renderWalkPace();
     showWalkTripBar();
     resumeNavigation();
+    syncNativeNav();
     loadExitStatus();
     timetableReady.then(() => {
       renderStorageBadge();

@@ -2,10 +2,8 @@
 # 받은 .ipa는 PC의 Sideloadly가 무료 Apple ID로 서명해서 아이폰에 설치 (7일마다 다시 설치)
 name: iOS unsigned build
 
+# iOS는 시연을 웹앱으로 하기로 해서 수동 실행만 (Actions의 macOS 시간 절약)
 on:
-  push:
-    branches: [feat/android-app]
-    paths: ['index.html', 'vendor/**', 'ocr/**', 'ios/**', 'capacitor.config.json', 'package*.json', 'scripts/build-mobile.mjs', '.github/workflows/ios-unsigned.yml']
   workflow_dispatch:
 
 jobs:
