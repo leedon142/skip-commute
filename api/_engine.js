@@ -607,13 +607,14 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     ? { sec: INDOOR_SEC, building: building.name, basis: `${building.name}까지 걷는 시간은 경로에 포함 · 건물 안 ${INDOOR_SEC / 60}분` }
     : { sec: CLASS_BUFFER_SEC, basis: room ? `'${room}'에서 건물을 못 찾아 정문 + 10분` : '강의실 정보 없음 · 정문 + 10분' };
   const forecast = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
-  // 폭염·한파·강풍이면 도보 시간을 늘리고, 화면에 보여줄 근거(advice)를 날씨 정보에 붙임
+  // 폭염·한파면 도보 시간을 늘리고, 화면에 보여줄 근거(advice)와 비·눈 배율을 날씨 정보에 붙임
   const extreme = extremeWalk(forecast);
-  const weather = forecast ? { ...forecast, advice: extreme.advice } : null;
+  const precipMult = WEATHER_WALK[forecast?.precip] ?? 1;
+  const weather = forecast ? { ...forecast, advice: extreme.advice, precipMult } : null;
   // 정류장 줄 제보 (실패해도 추천은 계속)
   const reports = await listReports(now).catch(() => []);
   const ctx = { weather, reports };
-  const walkMul = walkFactor * (WEATHER_WALK[weather?.precip] ?? 1) * extreme.mult;
+  const walkMul = walkFactor * precipMult * extreme.mult;
 
   // 캠퍼스 안에서 출발하면 경로는 정문·후문 기준점에서 받아 재사용하고 (ODsay 호출 절약),
   // 실제 위치에서 첫 정류장까지 걷는 시간만 따로 계산
