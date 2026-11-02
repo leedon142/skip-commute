@@ -3,7 +3,7 @@
 import { busStop, busStopsNear, subwayStation, subwayTimetable } from './_transit.js';
 import { findStation, searchPaths } from './_odsay.js';
 import { walkRoute } from './_walk.js';
-import { weatherAt } from './_weather.js';
+import { weatherAt, extremeWalk } from './_weather.js';
 import { kakao } from './_kakao.js';
 import { listReports, summarize, REPORT_APPLY_SEC } from './_reports.js';
 import { shuttleStatus } from './_shuttle.js';
@@ -606,11 +606,14 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   const buffer = !arriveBy ? null : building
     ? { sec: INDOOR_SEC, building: building.name, basis: `${building.name}까지 걷는 시간은 경로에 포함 · 건물 안 ${INDOOR_SEC / 60}분` }
     : { sec: CLASS_BUFFER_SEC, basis: room ? `'${room}'에서 건물을 못 찾아 정문 + 10분` : '강의실 정보 없음 · 정문 + 10분' };
-  const weather = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
+  const forecast = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
+  // 폭염·한파·강풍이면 도보 시간을 늘리고, 화면에 보여줄 근거(advice)를 날씨 정보에 붙임
+  const extreme = extremeWalk(forecast);
+  const weather = forecast ? { ...forecast, advice: extreme.advice } : null;
   // 정류장 줄 제보 (실패해도 추천은 계속)
   const reports = await listReports(now).catch(() => []);
   const ctx = { weather, reports };
-  const walkMul = walkFactor * (WEATHER_WALK[weather?.precip] ?? 1);
+  const walkMul = walkFactor * (WEATHER_WALK[weather?.precip] ?? 1) * extreme.mult;
 
   // 캠퍼스 안에서 출발하면 경로는 정문·후문 기준점에서 받아 재사용하고 (ODsay 호출 절약),
   // 실제 위치에서 첫 정류장까지 걷는 시간만 따로 계산
@@ -775,6 +778,6 @@ function dataSources(routes, pathSources, weather) {
   if (legs.some((l) => l.type === 'walk')) out.push({ what: '도보', by: 'OpenStreetMap 보행 경로', at: null, note: '내 걸음 속도 배율 반영' });
   if (legs.some((l) => l.report)) out.push({ what: '정류장 줄', by: '학우 제보', at: null, note: '15분 안 제보만 · 보통 10%·혼잡 40%를 못 탈 확률 하한으로' });
   if (legs.some((l) => l.type === 'shuttle')) out.push({ what: '국민대 셔틀', by: '학교 통학버스 시간표 + 학생 탑승 기록', at: null, note: '실시간 위치 없음 · 탑승 시간은 기록 3회 이상이면 중간값, 아니면 시간표 간격 15분' });
-  if (weather) out.push({ what: '날씨', by: `기상청 ${weather.source ?? '초단기예보'}`, at: null, note: `${weather.at} · ${weather.forTime} 예보` });
+  if (weather) out.push({ what: '날씨', by: `기상청 ${weather.source ?? '초단기예보'}`, at: null, note: `${weather.at} · ${weather.forTime} 예보${weather.advice?.length ? ` · ${weather.advice.join(', ')} (가정값)` : ''}` });
   return out;
 }

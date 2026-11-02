@@ -70,8 +70,34 @@ export async function weatherAt(pos, whenMs, now = Date.now()) {
     rainMm: rain && rain !== '강수없음' ? rain : null,
     tempC: temp != null ? Number(temp) : null,
     pop: v.POP != null ? Number(v.POP) : null,
+    windMs: v.WSD != null ? Number(v.WSD) : null,
     source: ultra ? '초단기예보' : '단기예보',
     at: `${base.date.slice(4, 6)}/${base.date.slice(6)} ${baseTime.slice(0, 2)}:${baseTime.slice(2)} 발표`,
     forTime: `${pick.slice(8, 10)}:${pick.slice(10)}`,
   };
+}
+
+// 폭염·한파·강풍 도보 보정. 단계 기준은 기상청 특보(폭염 33·35°C, 한파 -12°C, 강풍 14m/s)를 따르고,
+// 그 아래 '주의' 단계를 하나씩 더 둠. 배율은 근거 있는 실측이 아니라 가정값 (걸음 측정이 쌓이면 실측으로 교체)
+const HEAT = [[35, 1.1, '폭염'], [33, 1.05, '더위']]; // 기온(°C) 이상
+const COLD = [[-12, 1.1, '한파'], [-5, 1.05, '추위']]; // 기온(°C) 이하
+const WIND = [[14, 1.1, '강풍'], [9, 1.05, '센 바람']]; // 풍속(m/s) 이상
+export const EXTREME_WALK_MAX = 1.2; // 더위·추위와 바람이 겹쳐도 이 이상은 늘리지 않음
+
+// → { mult: 도보 시간 배율, advice: ['폭염: 도보 ×1.10', '강풍 15m/s: 도보 ×1.10'] }  (예보가 없거나 평범한 날씨면 1, [])
+export function extremeWalk(weather) {
+  const advice = [];
+  let mult = 1;
+  const t = weather?.tempC;
+  if (t != null) {
+    const hit = HEAT.find(([min]) => t >= min) ?? COLD.find(([max]) => t <= max);
+    // 기온은 화면에 이미 나오므로 근거 문구에는 단계와 배율만
+    if (hit) { mult *= hit[1]; advice.push(`${hit[2]}: 도보 ×${hit[1].toFixed(2)}`); }
+  }
+  const wind = weather?.windMs;
+  if (wind != null) {
+    const hit = WIND.find(([min]) => wind >= min);
+    if (hit) { mult *= hit[1]; advice.push(`${hit[2]} ${wind}m/s: 도보 ×${hit[1].toFixed(2)}`); }
+  }
+  return { mult: Math.min(mult, EXTREME_WALK_MAX), advice };
 }

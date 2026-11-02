@@ -29,7 +29,8 @@ export async function buildMessage(job, data) {
       return {
         title: `${hhmm(top.leaveBy)}에 출발하세요${diffMin >= 3 ? ` · ${diffMin}분 당겨짐` : ''}`,
         body: `${first ? `${first.from} ${rideName(first)} ${hhmm(first.departAt)} 탑승 → ` : ''}${hhmm(top.arriveAt)} ${data.to?.name ?? '학교'} 도착 (총 ${total}분).`
-          + (data.weather?.precip ? ` ${data.weather.precip} 예보 반영.` : ''),
+          + (data.weather?.precip ? ` ${data.weather.precip} 예보 반영.` : '')
+          + (data.weather?.advice?.length ? ` ${data.weather.advice.map((a) => a.split(':')[0]).join('·')} 반영.` : ''),
         url, tag,
       };
     }

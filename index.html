@@ -1777,7 +1777,10 @@
 
     function weatherText(w) {
       if (!w) return '';
-      return w.precip ? `${w.precip} 예보${w.tempC != null ? ` ${w.tempC}°C` : ''} · 도보 시간을 늘려 계산` : `강수 없음${w.tempC != null ? ` ${w.tempC}°C` : ''}`;
+      const temp = w.tempC != null ? ` ${w.tempC}°C` : '';
+      // 폭염·한파·강풍 보정은 가정값이라 어떤 단계라서 얼마나 늘렸는지 같이 보여줌
+      const extra = w.advice?.length ? ` · ${w.advice.join(' · ')}` : '';
+      return w.precip ? `${w.precip} 예보${temp} · 도보 시간을 늘려 계산${extra}` : `강수 없음${temp}${extra}`;
     }
 
     let lastRoutes = [];
