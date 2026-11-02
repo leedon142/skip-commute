@@ -172,6 +172,17 @@
     .report-opt.is-on[data-level="mid"] i, .report-opt.is-on[data-level="mid"] span { color: #9a6a00; }
     .report-opt.is-on[data-level="busy"] i, .report-opt.is-on[data-level="busy"] span { color: #b8262d; }
     .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
+    /* 폭염·한파·강풍 보정 배지: 실제 예보가 기준을 넘을 때만 나옴 (짙은 패널 위 기본, 흰 카드 위는 .is-light) */
+    .wx-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 4px 2px; }
+    .wx-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 9999px; background: rgba(255,255,255,0.12); color: #fff; font-size: 11px; font-weight: 800; box-shadow: var(--sh-card); }
+    .wx-badge i { font-size: 14px; }
+    .wx-badge small { font-size: 10px; font-weight: 700; opacity: 0.85; }
+    .wx-hot i { color: #ff9a8a; } .wx-cold i { color: #8fd0ff; } .wx-wind i { color: #cfd8e3; }
+    .wx-note { flex-basis: 100%; font-size: 10px; color: #dbe6f1; opacity: 0.85; }
+    .wx-badges.is-light { padding: 0 0 8px; }
+    .wx-badges.is-light .wx-badge { background: #f1f5f9; color: #0f172a; }
+    .wx-badges.is-light .wx-hot i { color: #e0484f; } .wx-badges.is-light .wx-cold i { color: #2f7de1; } .wx-badges.is-light .wx-wind i { color: #64748b; }
+    .wx-badges.is-light .wx-note { color: #64748b; }
     /* 짙은 패널 위 안내·오류·출처 글씨 */
     #rec-results > .p-3 { background: #fff; border-radius: 12px; }
     #rec-results > details, #rec-results > .px-3\.5 { color: #dbe6f1; }
@@ -1778,9 +1789,22 @@
     function weatherText(w) {
       if (!w) return '';
       const temp = w.tempC != null ? ` ${w.tempC}°C` : '';
-      // 폭염·한파·강풍 보정은 가정값이라 어떤 단계라서 얼마나 늘렸는지 같이 보여줌
-      const extra = w.advice?.length ? ` · ${w.advice.join(' · ')}` : '';
-      return w.precip ? `${w.precip} 예보${temp} · 도보 시간을 늘려 계산${extra}` : `강수 없음${temp}${extra}`;
+      return w.precip ? `${w.precip} 예보${temp} · 도보 시간을 늘려 계산` : `강수 없음${temp}`;
+    }
+
+    // 폭염·한파·강풍 보정을 한 줄 배지로. 엔진이 준 advice('폭염: 도보 ×1.10', '강풍 15m/s: 도보 ×1.10')를 그대로 쓰고,
+    // 배율은 가정값이라 그렇게 적음. 보정이 없으면 아무것도 안 그림
+    function weatherBadges(w, { light = false } = {}) {
+      if (!w?.advice?.length) return '';
+      const items = w.advice.map((a) => {
+        const [name, rest = ''] = a.split(':');
+        const mult = rest.split('×')[1]?.trim();
+        const kind = /폭염|더위/.test(name) ? 'hot' : /한파|추위/.test(name) ? 'cold' : 'wind';
+        const icon = { hot: 'ph-thermometer-hot', cold: 'ph-thermometer-cold', wind: 'ph-wind' }[kind];
+        const temp = kind !== 'wind' && w.tempC != null ? ` ${w.tempC}°C` : '';
+        return `<span class="wx-badge wx-${kind}"><i class="ph-bold ${icon}"></i>${escapeHtml(name + temp)}${mult ? `<small>도보 ×${escapeHtml(mult)}</small>` : ''}</span>`;
+      }).join('');
+      return `<div class="wx-badges${light ? ' is-light' : ''}">${items}<span class="wx-note">기상청 예보 기준 · 배율은 가정값이에요</span></div>`;
     }
 
     let lastRoutes = [];
@@ -1905,7 +1929,7 @@
           + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '')
           + basisSwitch;
         lastDest = { name: destLabel(data.destination), lat: data.destination.lat, lng: data.destination.lng };
-        box.innerHTML = (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        box.innerHTML = weatherBadges(data.weather) + (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
       } catch (e) {
@@ -2558,7 +2582,7 @@
         document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → ${data.to.name}`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
         lastMorningDest = { name: data.to.name, lat: data.to.lat, lng: data.to.lng };
-        routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
+        routesBox.innerHTML = weatherBadges(data.weather, { light: true }) + renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
       } catch (e) {
         alarm.textContent = hasHome() ? '계산 실패' : '집 미등록';
         reason.innerHTML = hasHome() ? escapeHtml(e.message) : `집을 등록하면 첫 수업에 맞춘 알람 시각을 계산해요.<br>${REGISTER_HOME_BUTTON}`;
