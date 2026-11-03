@@ -87,6 +87,10 @@ function shuttleLeg(sp, atSec, now, ctx = {}) {
   if (ride && ride.n >= SHUTTLE_MIN_RECORDS) {
     leg.rideMin = ride.medianMin;
     leg.rideBasis = `학생 탑승 기록 ${ride.n}회 중간값`;
+  } else if (stop.rideFallbackMin) {
+    // 시간표에 도착 시각이 없는 승차장(불광역 등)은 거리로 추정한 값을 쓰고 근거를 적음
+    leg.rideMin = stop.rideFallbackMin;
+    leg.rideBasis = `${stop.rideFallbackBasis}${ride ? `, 탑승 기록 ${ride.n}회는 아직 적음` : ''}`;
   } else {
     leg.rideBasis = `시간표 간격 기준 추정 (길음역→국민대 출발 최소 ${SHUTTLE_RIDE_FALLBACK_MIN}분${ride ? `, 탑승 기록 ${ride.n}회는 아직 적음` : ''})`;
   }
@@ -117,24 +121,35 @@ function dismissalShuttlePath(tail) {
   };
 }
 
-// 등교: ODsay 경로 중 길음역에서 내리는 구간까지 + 길음역 3번 출구까지 도보 + 셔틀 (추가 ODsay 호출 없음)
-async function morningShuttlePaths(paths) {
+// 등교 셔틀 승차장 (학교 공지). 경로가 이 역(이름에 match 포함)에서 내리면 거기서 셔틀로 갈아탐
+// maxEndM: 내린 곳이 승차장에서 이보다 멀면 다른 곳(예: 불광초교)이라 제외 (길음은 예전 그대로 제한 없음)
+export const MORNING_SHUTTLE_HUBS = [
+  { stop: 'gireum', match: '길음' },
+  { stop: 'bulgwang', match: '불광', maxEndM: 600 },
+];
+
+// 등교: ODsay 경로 중 승차장 역에서 내리는 구간까지 + 승차장까지 도보 + 셔틀 (추가 ODsay 호출 없음, 승차장마다 최대 2개)
+export async function morningShuttlePaths(paths) {
   const out = [];
-  const seen = new Set();
-  for (const { path } of paths) {
-    const i = path.subPath.findIndex((sp) => (sp.trafficType === 1 || sp.trafficType === 2) && sp.endName?.includes('길음'));
-    if (i < 0) continue;
-    const head = path.subPath.slice(0, i + 1);
-    const key = head.filter((sp) => sp.trafficType !== 3).map((sp) => `${sp.lane?.[0]?.busNo ?? sp.lane?.[0]?.name}@${sp.startName}`).join('>');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const end = { lat: Number(head[i].endY), lng: Number(head[i].endX) };
-    const w = await walkBetween(end, SHUTTLE_STOPS.gireum);
-    out.push({
-      source: 'shuttle',
-      subPath: [...head, { trafficType: 3, sectionTime: Math.max(1, Math.round(w.sec / 60)), distance: w.distanceM }, shuttleSubPath(['gireum'], 'kookmin')],
-    });
-    if (out.length >= 2) break;
+  for (const hub of MORNING_SHUTTLE_HUBS) {
+    const seen = new Set();
+    let n = 0;
+    for (const { path } of paths) {
+      const i = path.subPath.findIndex((sp) => (sp.trafficType === 1 || sp.trafficType === 2) && sp.endName?.includes(hub.match));
+      if (i < 0) continue;
+      const head = path.subPath.slice(0, i + 1);
+      const key = head.filter((sp) => sp.trafficType !== 3).map((sp) => `${sp.lane?.[0]?.busNo ?? sp.lane?.[0]?.name}@${sp.startName}`).join('>');
+      if (seen.has(key)) continue;
+      const end = { lat: Number(head[i].endY), lng: Number(head[i].endX) };
+      if (hub.maxEndM && distM(end, SHUTTLE_STOPS[hub.stop]) > hub.maxEndM) continue;
+      seen.add(key);
+      const w = await walkBetween(end, SHUTTLE_STOPS[hub.stop]);
+      out.push({
+        source: 'shuttle',
+        subPath: [...head, { trafficType: 3, sectionTime: Math.max(1, Math.round(w.sec / 60)), distance: w.distanceM }, shuttleSubPath([hub.stop], 'kookmin')],
+      });
+      if (++n >= 2) break;
+    }
   }
   return out;
 }
