@@ -3201,7 +3201,7 @@
         const arrive = Date.parse(l.arriveAt);
         // 버스: 타기 전까지 만차·지연을 지켜봄 (stopAt = 정류장에 도착할 예정 시각)
         const bus = l.type === 'bus' && l.ars
-          ? { ars: l.ars, route: l.route, from: l.from, departAt: Date.parse(l.departAt), stopAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000 }
+          ? { ars: l.ars, route: l.route, from: l.from, pos: l.fromPos ?? null, departAt: Date.parse(l.departAt), stopAt: Date.parse(l.departAt) - (l.waitSec || 0) * 1000 }
           : null;
         // 앞 구간에서 내릴 준비할 때 갈아탈 버스 도착을 같이 알려줌
         if (prev && bus) steps[steps.length - 1].nextBus = bus;
@@ -3314,6 +3314,7 @@
         const step = cur?.steps[cur.idx];
         if (cur?.offer && Date.now() - cur.offer.at > REROUTE_OFFER_MS) declineReroute();
         if (step?.planAt) maybeReroute(Date.now() - step.planAt);
+        checkArrival();
         if (!step?.timeAt) return;
         const gpsStale = Date.now() - navLastFix > NAV_GPS_STALE_MS;
         if ((step.underground || gpsStale || !step.target) && Date.now() >= step.timeAt) advanceNav();
@@ -3474,6 +3475,51 @@
       const busy = (rep.reports || []).find((x) => x.ars === bus.ars && x.level === 'busy' && Date.now() - x.at < 15 * 60e3);
       if (busy) return { kind: 'busy', text: `${bus.from} 줄이 길다는 학우 제보가 있어요 (${Math.round((Date.now() - busy.at) / 60e3)}분 전)` };
       return null;
+    }
+
+    // ---------------- 탈 버스 접근 알림 ----------------
+    // 정류장 60m 안에 들어오면(GPS가 없으면 정류장 도착 예정 2분 전부터) 20초마다 도착 정보를 보고,
+    // '곧 도착'·'1번째 전'(또는 90초 안)이면 한 번 알리고 그 버스는 그만 봄. 5분 넘게 남았으면 1분마다 (서울시 API 한도 아끼기)
+    // 브라우저에선 화면이 켜져 있고 페이지가 열려 있을 때만 동작
+    const ARRIVE_NEAR_M = 60;
+    const ARRIVE_LEFT_M = 400; // 타는 단계인데 정류장에서 이만큼 멀어졌으면 이미 탄 것
+    const ARRIVE_POLL_MS = 20e3;
+    const ARRIVE_FAR_POLL_MS = 60e3;
+    const ARRIVE_WATCH_AFTER_MS = 5 * 60e3; // 예정 출발 5분 뒤까지만
+    let arriveNextAt = 0;
+    let arriveBusy = false;
+
+    const busApproaching = (a) => !!a && (/곧 도착/.test(a.message || '') || a.stopsAway === 1 || (a.seconds != null && a.seconds <= 90));
+
+    async function checkArrival() {
+      const nav = navState();
+      const step = nav?.steps[nav.idx];
+      const bus = step?.watch;
+      if (!bus || arriveBusy || Date.now() < arriveNextAt || Date.now() > bus.departAt + ARRIVE_WATCH_AFTER_MS) return;
+      const key = `arrive:${bus.ars}:${bus.route}:${bus.departAt}`;
+      if (nav.alerted?.includes(key)) return;
+      const fresh = navLastPos && Date.now() - navLastFix < NAV_GPS_STALE_MS;
+      const d = fresh && bus.pos ? metersBetween(navLastPos, bus.pos) : null;
+      const riding = step.timeAt != null; // '버스 타기' 단계 (정류장에 도착함)
+      if (riding && d != null && d > ARRIVE_LEFT_M) return;
+      if (!riding && (d != null ? d > ARRIVE_NEAR_M : Date.now() < bus.stopAt - 2 * 60e3)) return;
+      arriveBusy = true;
+      try {
+        const { arrivals } = await busArrivals(bus.ars, bus.route);
+        const a = arrivals[0];
+        arriveNextAt = Date.now() + (a?.seconds > 300 ? ARRIVE_FAR_POLL_MS : ARRIVE_POLL_MS);
+        const cur = navState();
+        if (!busApproaching(a) || !cur || cur.idx !== nav.idx) return;
+        cur.alerted = [...(cur.alerted || []), key];
+        saveNav(cur);
+        speak(`곧 ${bus.route}번 버스가 도착해요. 탑승을 준비하세요.`);
+        navigator.vibrate?.([500, 200, 500]);
+        triggerToast(`곧 ${bus.route}번 버스 도착 · ${bus.from}`);
+      } catch {
+        arriveNextAt = Date.now() + ARRIVE_POLL_MS;
+      } finally {
+        arriveBusy = false;
+      }
     }
 
     async function watchBus() {
