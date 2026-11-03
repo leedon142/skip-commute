@@ -27,9 +27,19 @@ import android.speech.tts.UtteranceProgressListener;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -37,6 +47,7 @@ import org.json.JSONObject;
  * 길안내 포그라운드 서비스: 앱을 닫거나 화면을 꺼도 위치로 단계를 넘기고, 음성 안내·잠금화면 알림을 맡음.
  * 단계 판정은 웹(index.html)의 resumeNavigation과 같은 규칙: 목표 반경(GPS 오차만큼, 최대 2배) 안에 들어오면 다음 단계,
  * 지하·GPS 끊김(60초)·목표 없음이면 예상 시각(timeAt)이 지나면 다음 단계.
+ * 탈 버스 접근 알림도 맡음: 정류장 근처에서 버스 도착 정보를 보다가 곧 오면 헤드업 알림·진동·음성 (웹의 checkArrival과 같은 규칙).
  */
 public class NavigationService extends Service {
 
@@ -57,6 +68,13 @@ public class NavigationService extends Service {
     private static final long GPS_STALE_MS = 60000;
     // 지하철 시각 보정·갈아탈 버스 안내처럼 웹이 실시간 정보를 붙여 말하는 단계는 웹이 말할 때까지 잠깐 기다림
     private static final long WEB_SPEECH_WAIT_MS = 8000;
+
+    private static final String ARRIVE_CHANNEL_ID = "skip_bus_arrival";
+    private static final int ARRIVE_NOTIFICATION_ID = 3001;
+    private static final double ARRIVE_NEAR_M = 60;
+    private static final double ARRIVE_LEFT_M = 400; // 타는 단계인데 정류장에서 이만큼 멀어졌으면 이미 탄 것
+    private static final long ARRIVE_POLL_MS = 20000;
+    private static final long ARRIVE_FAR_POLL_MS = 60000; // 5분 넘게 남았으면 1분마다 (서울시 API 한도 아끼기)
 
     /** 플러그인(웹)으로 상태를 알림 */
     interface Listener {
@@ -84,6 +102,11 @@ public class NavigationService extends Service {
     private int speaking;
     private Runnable webSpeechFallback;
     private boolean finishing;
+    private String apiBase = "";
+    private final Set<String> arriveAlerted = new HashSet<>();
+    private final ExecutorService net = Executors.newSingleThreadExecutor();
+    private long arriveNextAt;
+    private boolean arriveBusy;
 
     private final LocationListener locationListener = this::onLocation;
 
@@ -91,6 +114,7 @@ public class NavigationService extends Service {
         @Override
         public void run() {
             checkTime();
+            checkArrival();
             handler.postDelayed(this, TICK_MS);
         }
     };
@@ -171,6 +195,9 @@ public class NavigationService extends Service {
             if (fresh) {
                 dest = p.optString("dest", "");
                 muted = p.optBoolean("muted", false);
+                apiBase = p.optString("api", apiBase);
+                JSONArray alerted = p.optJSONArray("alerted");
+                for (int i = 0; alerted != null && i < alerted.length(); i++) arriveAlerted.add(alerted.optString(i));
                 currentIdx = idx;
                 finishing = false;
             } else if (idx > currentIdx) {
@@ -189,7 +216,8 @@ public class NavigationService extends Service {
             JSONObject p = new JSONObject();
             JSONArray arr = new JSONArray();
             for (JSONObject s : steps) arr.put(s);
-            p.put("steps", arr).put("idx", currentIdx).put("dest", dest).put("muted", muted);
+            p.put("steps", arr).put("idx", currentIdx).put("dest", dest).put("muted", muted)
+                .put("api", apiBase).put("alerted", new JSONArray(arriveAlerted));
             prefs().edit().putString("nav", p.toString()).apply();
         } catch (Exception ignored) {}
     }
@@ -243,7 +271,10 @@ public class NavigationService extends Service {
     }
 
     private Double distanceTo(JSONObject step, Location loc) {
-        JSONObject t = step.optJSONObject("target");
+        return distanceToPoint(step.optJSONObject("target"), loc);
+    }
+
+    private Double distanceToPoint(JSONObject t, Location loc) {
         if (t == null || !t.has("lat")) return null;
         float[] out = new float[1];
         Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), t.optDouble("lat"), t.optDouble("lng"), out);
@@ -358,9 +389,97 @@ public class NavigationService extends Service {
         stopSelf();
     }
 
+    // ---------------- 탈 버스 접근 알림 ----------------
+
+    /** 정류장 60m 안(GPS가 없으면 정류장 도착 예정 2분 전부터)이면 도착 정보를 보고, 곧 오면 그 버스는 한 번만 알림 */
+    private void checkArrival() {
+        if (!running || finishing || arriveBusy || apiBase.isEmpty()) return;
+        JSONObject step = steps.get(currentIdx);
+        JSONObject bus = step.optJSONObject("board");
+        long now = System.currentTimeMillis();
+        if (bus == null || now < arriveNextAt || now > bus.optLong("until")) return;
+        String key = bus.optString("ars") + ":" + bus.optString("route") + ":" + bus.optLong("until");
+        if (arriveAlerted.contains(key)) return;
+        Double d = lastLocation != null && now - lastFixAt < GPS_STALE_MS ? distanceToPoint(bus.optJSONObject("pos"), lastLocation) : null;
+        boolean riding = !step.isNull("timeAt"); // '버스 타기' 단계 (정류장에 도착함)
+        if (riding && d != null && d > ARRIVE_LEFT_M) return;
+        if (!riding && (d != null ? d > ARRIVE_NEAR_M : now < bus.optLong("stopAt") - 120000)) return;
+        arriveBusy = true;
+        int idx = currentIdx;
+        String ars = bus.optString("ars");
+        String route = bus.optString("route");
+        String from = bus.optString("from");
+        net.execute(() -> {
+            JSONObject a = fetchArrival(ars, route);
+            handler.post(() -> {
+                arriveBusy = false;
+                double sec = a == null || a.isNull("seconds") ? Double.NaN : a.optDouble("seconds");
+                arriveNextAt = System.currentTimeMillis() + (sec > 300 ? ARRIVE_FAR_POLL_MS : ARRIVE_POLL_MS);
+                if (!running || currentIdx != idx || a == null) return;
+                int stopsAway = a.isNull("stopsAway") ? -1 : a.optInt("stopsAway", -1);
+                if (!busApproaching(a.optString("message", ""), stopsAway, sec)) return;
+                arriveAlerted.add(key);
+                save();
+                showArrivalAlert(route, from);
+            });
+        });
+    }
+
+    /** '곧 도착'·'[1번째 전]'이거나 90초 안. 모르는 값은 stopsAway -1, seconds NaN */
+    static boolean busApproaching(String message, int stopsAway, double seconds) {
+        return (message != null && message.contains("곧 도착")) || stopsAway == 1 || seconds <= 90;
+    }
+
+    /** 우리 서버(/api/bus)의 그 노선 첫 차. 서울시 키는 서버에만 있음 */
+    private JSONObject fetchArrival(String ars, String route) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(apiBase + "/api/bus?ars=" + URLEncoder.encode(ars, "UTF-8")).openConnection();
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(8000);
+            if (c.getResponseCode() != 200) return null;
+            StringBuilder body = new StringBuilder();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+                for (String line; (line = r.readLine()) != null; ) body.append(line);
+            }
+            JSONArray routes = new JSONObject(body.toString()).optJSONArray("routes");
+            for (int i = 0; routes != null && i < routes.length(); i++) {
+                JSONObject rt = routes.optJSONObject(i);
+                if (rt == null || !route.equals(rt.optString("route"))) continue;
+                JSONArray arr = rt.optJSONArray("arrivals");
+                return arr != null && arr.length() > 0 ? arr.optJSONObject(0) : null;
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.disconnect();
+        }
+        return null;
+    }
+
+    /** 다른 앱을 보고 있어도 화면 위에 뜨는 헤드업 알림 + 진동 + 음성 */
+    private void showArrivalAlert(String route, String from) {
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent openPi = PendingIntent.getActivity(this, 2, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n = new NotificationCompat.Builder(this, ARRIVE_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setContentTitle("곧 " + route + "번 버스 도착")
+            .setContentText(from + " · 탑승을 준비하세요")
+            .setContentIntent(openPi)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVibrate(new long[] { 0, 500, 200, 500 })
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setTimeoutAfter(10 * 60000)
+            .build();
+        getSystemService(NotificationManager.class).notify(ARRIVE_NOTIFICATION_ID, n);
+        say("곧 " + route + "번 버스가 도착해요. 탑승을 준비하세요.");
+    }
+
     @Override
     public void onDestroy() {
         running = false;
+        net.shutdownNow();
         handler.removeCallbacksAndMessages(null);
         if (locationManager != null) locationManager.removeUpdates(locationListener);
         if (tts != null) tts.shutdown();
@@ -382,6 +501,14 @@ public class NavigationService extends Service {
         ch.setDescription("길안내 중 지금 할 일과 남은 거리");
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         getSystemService(NotificationManager.class).createNotificationChannel(ch);
+        // 탈 버스 접근: 화면 위에 뜨고 진동. 소리는 음성 안내가 하므로 알림음은 끔
+        NotificationChannel arrive = new NotificationChannel(ARRIVE_CHANNEL_ID, "버스 도착 알림", NotificationManager.IMPORTANCE_HIGH);
+        arrive.setDescription("탈 버스가 곧 정류장에 올 때");
+        arrive.setSound(null, null);
+        arrive.enableVibration(true);
+        arrive.setVibrationPattern(new long[] { 0, 500, 200, 500 });
+        arrive.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        getSystemService(NotificationManager.class).createNotificationChannel(arrive);
     }
 
     private Notification buildNotification(Double dist) {
