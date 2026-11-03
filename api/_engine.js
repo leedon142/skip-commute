@@ -618,14 +618,27 @@ const MORNING_PROBE_SEC = 100 * 60;
 // direction 'home': origin(학교/GPS) → 집,  'school': 집 → origin 자리에 정문
 // departAt: 이 시각에 출발 (기본 지금), arriveBy: 이 시각까지 도착 (등교)
 // home: 역 이름("연신내") 또는 상세주소 좌표 { name, lat, lng }
+// ODsay 한 번에 받은 경로 중 실시간으로 계산해 볼 개수. ODsay 순서는 시간표 기준이라 실시간으로 더 빠른 경로가
+// 뒤에 있을 수 있음 (예: 새절 → 국민대 7212 → 7211이 6·7번째). 늘려도 ODsay 호출은 그대로, 서울시 실시간 조회만 늘어남
+const PATHS_PER_SEARCH = 10;
+// 등교: GPS가 등록한 집에서 이 거리 안이면 집에서 출발하는 것으로 봄
+const HOME_SNAP_M = 150;
+
 export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, room, walkFactor = 1, now = Date.now() }) {
   const homeStation = typeof home === 'string'
     ? { ...(await findStation(home)), kind: 'station' }
     : { ...home, kind: 'address' };
   // 등교: 첫 수업 건물까지 (건물을 모르면 정문)
   const building = direction === 'school' ? await findBuilding(room) : null;
+  // 등교도 지금 위치(GPS)에서 출발. 등록한 집 근처면 집 좌표를 써서 저장해 둔 경로를 재사용 (GPS 흔들림마다 ODsay를 새로 부르지 않게),
+  // 캠퍼스 안이면(수업 중에 내일 등교를 볼 때) 집에서 출발
+  const atHome = homeStation.lat != null && origin?.source === 'gps' && distM(origin, homeStation) <= HOME_SNAP_M;
+  const atSchool = origin?.source === 'gps' && distM(origin, MAIN_GATE) <= CAMPUS_RADIUS_M;
+  const start = direction === 'school' && origin?.source === 'gps' && !atHome && !atSchool
+    ? { lat: origin.lat, lng: origin.lng, name: '현재 위치', kind: 'gps' }
+    : homeStation;
   const [from, to] = direction === 'school'
-    ? [homeStation, building ? { ...building, name: `국민대 ${building.name}`, kind: 'building' } : { ...MAIN_GATE, name: '국민대 정문' }]
+    ? [start, building ? { ...building, name: `국민대 ${building.name}`, kind: 'building' } : { ...MAIN_GATE, name: '국민대 정문' }]
     : [origin, homeStation];
   const leaveTarget = arriveBy ? arriveBy - MORNING_PROBE_SEC * 1000 : departAt ?? now;
   const startSec = Math.max(0, Math.round((leaveTarget - now) / 1000));
@@ -655,7 +668,7 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   const search = (list) => Promise.allSettled(list.flatMap((a) => goals.map(async (g) => {
     const found = await searchPaths(a, g);
     pathSources.push({ source: found.source, at: found.at });
-    return found.paths.slice(0, 5).map((path) => ({ path, anchor: a }));
+    return found.paths.slice(0, PATHS_PER_SEARCH).map((path) => ({ path, anchor: a }));
   })));
   let settled = await search(anchors);
   let paths = settled.flatMap((s) => (s.status === 'fulfilled' ? s.value : []));
