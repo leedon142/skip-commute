@@ -4,3 +4,12 @@ data/*.py
 .env*
 data/raw/
 data/.odsay-cache.json
+# 안드로이드·iOS 시연 앱 (웹 배포에 올리지 않음)
+android/
+ios/
+mobile/
+mobile-tests/
+scripts/
+capacitor.config.json
+MOBILE-DEMO.md
+.github/

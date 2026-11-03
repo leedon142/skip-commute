@@ -3,9 +3,10 @@
 import { busStop, busStopsNear, subwayStation, subwayTimetable } from './_transit.js';
 import { findStation, searchPaths } from './_odsay.js';
 import { walkRoute } from './_walk.js';
-import { weatherAt } from './_weather.js';
+import { weatherAt, extremeWalk } from './_weather.js';
 import { kakao } from './_kakao.js';
 import { listReports, summarize, REPORT_APPLY_SEC } from './_reports.js';
+import { activeIncidents, incidentsAlong } from './_incidents.js';
 import { shuttleStatus } from './_shuttle.js';
 import shuttleData from '../data/shuttle.json' with { type: 'json' };
 import profile from '../data/boarding_profile.json' with { type: 'json' };
@@ -36,6 +37,10 @@ const LAST_BUS_SLACK_SEC = 2 * 3600;
 const WEATHER_WALK = { 비: 1.15, '비/눈': 1.2, 눈: 1.25, 소나기: 1.15, 빗방울: 1.05, '빗방울·눈날림': 1.1, 눈날림: 1.1 };
 // 실시간 탑승 시간이 평소(ODsay)와 이만큼 넘게 다르면 경로 설명에 표시
 const LIVE_RIDE_NOTE_SEC = 120;
+// 도로 정체 판단: 지금 실시간 탑승 시간이 평소보다 이만큼 길면 '버스 지연 중', 지금 진행 중인 돌발정보는 곧 출발할 때만 의미가 있음
+const DELAY_NOTE_SEC = 180;
+const INCIDENT_APPLY_SEC = 60 * 60;
+const JAM_TYPES = ['A01', 'A02', 'A10']; // 사고·고장·행사(행진 등)는 '정체 가능', 공사는 길게 이어져서 자세히 볼 때만 보여줌
 const RAIN_MISS_ADD = 0.1;
 // 편한 순 가중치: 서서 가는 1분 = +0.5분, 좌석 여부 모르는 1분 = +0.25분(반반), 환승 1회 = +2분
 const COMFORT = { standing: 0.5, unknownSeat: 0.25, transferSec: 120 };
@@ -87,6 +92,10 @@ function shuttleLeg(sp, atSec, now, ctx = {}) {
   if (ride && ride.n >= SHUTTLE_MIN_RECORDS) {
     leg.rideMin = ride.medianMin;
     leg.rideBasis = `학생 탑승 기록 ${ride.n}회 중간값`;
+  } else if (stop.rideFallbackMin) {
+    // 시간표에 도착 시각이 없는 승차장(불광역 등)은 거리로 추정한 값을 쓰고 근거를 적음
+    leg.rideMin = stop.rideFallbackMin;
+    leg.rideBasis = `${stop.rideFallbackBasis}${ride ? `, 탑승 기록 ${ride.n}회는 아직 적음` : ''}`;
   } else {
     leg.rideBasis = `시간표 간격 기준 추정 (길음역→국민대 출발 최소 ${SHUTTLE_RIDE_FALLBACK_MIN}분${ride ? `, 탑승 기록 ${ride.n}회는 아직 적음` : ''})`;
   }
@@ -117,24 +126,35 @@ function dismissalShuttlePath(tail) {
   };
 }
 
-// 등교: ODsay 경로 중 길음역에서 내리는 구간까지 + 길음역 3번 출구까지 도보 + 셔틀 (추가 ODsay 호출 없음)
-async function morningShuttlePaths(paths) {
+// 등교 셔틀 승차장 (학교 공지). 경로가 이 역(이름에 match 포함)에서 내리면 거기서 셔틀로 갈아탐
+// maxEndM: 내린 곳이 승차장에서 이보다 멀면 다른 곳(예: 불광초교)이라 제외 (길음은 예전 그대로 제한 없음)
+export const MORNING_SHUTTLE_HUBS = [
+  { stop: 'gireum', match: '길음' },
+  { stop: 'bulgwang', match: '불광', maxEndM: 600 },
+];
+
+// 등교: ODsay 경로 중 승차장 역에서 내리는 구간까지 + 승차장까지 도보 + 셔틀 (추가 ODsay 호출 없음, 승차장마다 최대 2개)
+export async function morningShuttlePaths(paths) {
   const out = [];
-  const seen = new Set();
-  for (const { path } of paths) {
-    const i = path.subPath.findIndex((sp) => (sp.trafficType === 1 || sp.trafficType === 2) && sp.endName?.includes('길음'));
-    if (i < 0) continue;
-    const head = path.subPath.slice(0, i + 1);
-    const key = head.filter((sp) => sp.trafficType !== 3).map((sp) => `${sp.lane?.[0]?.busNo ?? sp.lane?.[0]?.name}@${sp.startName}`).join('>');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const end = { lat: Number(head[i].endY), lng: Number(head[i].endX) };
-    const w = await walkBetween(end, SHUTTLE_STOPS.gireum);
-    out.push({
-      source: 'shuttle',
-      subPath: [...head, { trafficType: 3, sectionTime: Math.max(1, Math.round(w.sec / 60)), distance: w.distanceM }, shuttleSubPath(['gireum'], 'kookmin')],
-    });
-    if (out.length >= 2) break;
+  for (const hub of MORNING_SHUTTLE_HUBS) {
+    const seen = new Set();
+    let n = 0;
+    for (const { path } of paths) {
+      const i = path.subPath.findIndex((sp) => (sp.trafficType === 1 || sp.trafficType === 2) && sp.endName?.includes(hub.match));
+      if (i < 0) continue;
+      const head = path.subPath.slice(0, i + 1);
+      const key = head.filter((sp) => sp.trafficType !== 3).map((sp) => `${sp.lane?.[0]?.busNo ?? sp.lane?.[0]?.name}@${sp.startName}`).join('>');
+      if (seen.has(key)) continue;
+      const end = { lat: Number(head[i].endY), lng: Number(head[i].endX) };
+      if (hub.maxEndM && distM(end, SHUTTLE_STOPS[hub.stop]) > hub.maxEndM) continue;
+      seen.add(key);
+      const w = await walkBetween(end, SHUTTLE_STOPS[hub.stop]);
+      out.push({
+        source: 'shuttle',
+        subPath: [...head, { trafficType: 3, sectionTime: Math.max(1, Math.round(w.sec / 60)), distance: w.distanceM }, shuttleSubPath([hub.stop], 'kookmin')],
+      });
+      if (++n >= 2) break;
+    }
   }
   return out;
 }
@@ -269,6 +289,7 @@ async function busLeg(sp, atSec, now, arsOverride, ctx = {}) {
           const liveSec = same.seconds - catchable.seconds;
           leg.liveRideSec = liveSec;
           leg.rideMin = Math.round(liveSec / 60);
+          if (liveSec - sp.sectionTime * 60 >= DELAY_NOTE_SEC) leg.delayMin = Math.round((liveSec - sp.sectionTime * 60) / 60);
           if (Math.abs(liveSec - sp.sectionTime * 60) >= LIVE_RIDE_NOTE_SEC) {
             leg.notes.push(`지금 도로 사정으로 ${leg.rideMin}분 탑승 (평소 ${sp.sectionTime}분)`);
           }
@@ -516,6 +537,11 @@ export async function evaluatePath(path, now, firstWalkOverride, startSec = 0, w
     const passed = sp.passStopList?.stations ?? [];
     const before = passed.length >= 3 ? passed[passed.length - 2] : null;
     leg.preStop = before ? { name: before.stationName, ...pos(before.y, before.x) } : null;
+    // 도로 정체 예상: 버스가 지나는 길(정류장을 이은 선) 300m 안의 돌발정보. 소요시간에는 반영하지 않고 알려주기만 함
+    if (sp.trafficType === 2 && ctx.incidents) {
+      const near = incidentsAlong(passed.map((s) => pos(s.y, s.x)).filter(Boolean), ctx.incidents);
+      if (near.length) leg.traffic = { incidents: near.slice(0, 3), total: near.length, jam: near.some((i) => JAM_TYPES.includes(i.type)) };
+    }
     if (sp.trafficType === 1 && sp.endExitNo) leg.exitNo = sp.endExitNo;
     leg.departAt = new Date(now + (t + leg.waitSec) * 1000).toISOString();
     const rideSec = sp.trafficType === 'shuttle' ? leg.rideMin * 60 : leg.liveRideSec ?? sp.sectionTime * 60;
@@ -592,25 +618,44 @@ const MORNING_PROBE_SEC = 100 * 60;
 // direction 'home': origin(학교/GPS) → 집,  'school': 집 → origin 자리에 정문
 // departAt: 이 시각에 출발 (기본 지금), arriveBy: 이 시각까지 도착 (등교)
 // home: 역 이름("연신내") 또는 상세주소 좌표 { name, lat, lng }
+// ODsay 한 번에 받은 경로 중 실시간으로 계산해 볼 개수. ODsay 순서는 시간표 기준이라 실시간으로 더 빠른 경로가
+// 뒤에 있을 수 있음 (예: 새절 → 국민대 7212 → 7211이 6·7번째). 늘려도 ODsay 호출은 그대로, 서울시 실시간 조회만 늘어남
+const PATHS_PER_SEARCH = 10;
+// 등교: GPS가 등록한 집에서 이 거리 안이면 집에서 출발하는 것으로 봄
+const HOME_SNAP_M = 150;
+
 export async function recommend({ origin, home, direction = 'home', mode = 'fast', departAt, arriveBy, room, walkFactor = 1, now = Date.now() }) {
   const homeStation = typeof home === 'string'
     ? { ...(await findStation(home)), kind: 'station' }
     : { ...home, kind: 'address' };
   // 등교: 첫 수업 건물까지 (건물을 모르면 정문)
   const building = direction === 'school' ? await findBuilding(room) : null;
+  // 등교도 지금 위치(GPS)에서 출발. 등록한 집 근처면 집 좌표를 써서 저장해 둔 경로를 재사용 (GPS 흔들림마다 ODsay를 새로 부르지 않게),
+  // 캠퍼스 안이면(수업 중에 내일 등교를 볼 때) 집에서 출발
+  const atHome = homeStation.lat != null && origin?.source === 'gps' && distM(origin, homeStation) <= HOME_SNAP_M;
+  const atSchool = origin?.source === 'gps' && distM(origin, MAIN_GATE) <= CAMPUS_RADIUS_M;
+  const start = direction === 'school' && origin?.source === 'gps' && !atHome && !atSchool
+    ? { lat: origin.lat, lng: origin.lng, name: '현재 위치', kind: 'gps' }
+    : homeStation;
   const [from, to] = direction === 'school'
-    ? [homeStation, building ? { ...building, name: `국민대 ${building.name}`, kind: 'building' } : { ...MAIN_GATE, name: '국민대 정문' }]
+    ? [start, building ? { ...building, name: `국민대 ${building.name}`, kind: 'building' } : { ...MAIN_GATE, name: '국민대 정문' }]
     : [origin, homeStation];
   const leaveTarget = arriveBy ? arriveBy - MORNING_PROBE_SEC * 1000 : departAt ?? now;
   const startSec = Math.max(0, Math.round((leaveTarget - now) / 1000));
   const buffer = !arriveBy ? null : building
     ? { sec: INDOOR_SEC, building: building.name, basis: `${building.name}까지 걷는 시간은 경로에 포함 · 건물 안 ${INDOOR_SEC / 60}분` }
     : { sec: CLASS_BUFFER_SEC, basis: room ? `'${room}'에서 건물을 못 찾아 정문 + 10분` : '강의실 정보 없음 · 정문 + 10분' };
-  const weather = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
+  const forecast = await weatherAt(MAIN_GATE, now + startSec * 1000, now).catch(() => null);
+  // 폭염·한파면 도보 시간을 늘리고, 화면에 보여줄 근거(advice)와 비·눈 배율을 날씨 정보에 붙임
+  const extreme = extremeWalk(forecast);
+  const precipMult = WEATHER_WALK[forecast?.precip] ?? 1;
+  const weather = forecast ? { ...forecast, advice: extreme.advice, precipMult } : null;
   // 정류장 줄 제보 (실패해도 추천은 계속)
   const reports = await listReports(now).catch(() => []);
-  const ctx = { weather, reports };
-  const walkMul = walkFactor * (WEATHER_WALK[weather?.precip] ?? 1);
+  // 진행 중인 돌발정보(사고·고장·공사·행사): 곧 출발할 때만 쓰고, 못 불러와도 추천은 계속 (null = 확인 못 함)
+  const incidents = startSec <= INCIDENT_APPLY_SEC ? await activeIncidents(now).catch(() => null) : null;
+  const ctx = { weather, reports, incidents };
+  const walkMul = walkFactor * precipMult * extreme.mult;
 
   // 캠퍼스 안에서 출발하면 경로는 정문·후문 기준점에서 받아 재사용하고 (ODsay 호출 절약),
   // 실제 위치에서 첫 정류장까지 걷는 시간만 따로 계산
@@ -623,7 +668,7 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
   const search = (list) => Promise.allSettled(list.flatMap((a) => goals.map(async (g) => {
     const found = await searchPaths(a, g);
     pathSources.push({ source: found.source, at: found.at });
-    return found.paths.slice(0, 5).map((path) => ({ path, anchor: a }));
+    return found.paths.slice(0, PATHS_PER_SEARCH).map((path) => ({ path, anchor: a }));
   })));
   let settled = await search(anchors);
   let paths = settled.flatMap((s) => (s.status === 'fulfilled' ? s.value : []));
@@ -700,6 +745,8 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     if (r.legs.some((l) => l.lastVehicle)) r.tags.push('막차');
     else if (r.legs.some((l) => l.lastRisk)) r.tags.push('막차 확인 필요');
     if (r.unavailable) r.tags.push('운행 종료 노선 포함');
+    if (r.legs.some((l) => l.traffic?.jam)) r.tags.push('정체 가능');
+    if (r.legs.some((l) => l.delayMin)) r.tags.push('버스 지연 중');
     const rides = r.legs.filter((l) => l.type !== 'walk');
     const rideSecWhere = (pred) => rides.filter(pred).reduce((s, l) => s + l.rideMin * 60, 0);
     const standingSec = rideSecWhere((l) => l.seatLikely === false);
@@ -744,13 +791,13 @@ export async function recommend({ origin, home, direction = 'home', mode = 'fast
     weather,
     walkFactor: walkMul,
     fallback,
-    sources: dataSources(routes, pathSources, weather),
+    sources: dataSources(routes, pathSources, weather, incidents != null),
     routes,
   };
 }
 
 // 화면에 보여줄 정보 출처와 갱신 시각
-function dataSources(routes, pathSources, weather) {
+function dataSources(routes, pathSources, weather, incidentsChecked = false) {
   const legs = routes.flatMap((r) => r.legs);
   const newest = (list) => list.filter(Boolean).sort().at(-1) ?? null;
   const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
@@ -775,6 +822,9 @@ function dataSources(routes, pathSources, weather) {
   if (legs.some((l) => l.type === 'walk')) out.push({ what: '도보', by: 'OpenStreetMap 보행 경로', at: null, note: '내 걸음 속도 배율 반영' });
   if (legs.some((l) => l.report)) out.push({ what: '정류장 줄', by: '학우 제보', at: null, note: '15분 안 제보만 · 보통 10%·혼잡 40%를 못 탈 확률 하한으로' });
   if (legs.some((l) => l.type === 'shuttle')) out.push({ what: '국민대 셔틀', by: '학교 통학버스 시간표 + 학생 탑승 기록', at: null, note: '실시간 위치 없음 · 탑승 시간은 기록 3회 이상이면 중간값, 아니면 시간표 간격 15분' });
-  if (weather) out.push({ what: '날씨', by: `기상청 ${weather.source ?? '초단기예보'}`, at: null, note: `${weather.at} · ${weather.forTime} 예보` });
+  if (incidentsChecked && legs.some((l) => l.type === 'bus')) {
+    out.push({ what: '도로 정체 예상', by: '서울시 실시간 돌발정보', at: null, note: '버스가 지나는 길 300m 안의 사고·고장·행사는 \'정체 가능\'으로 알림만 (소요시간에는 반영 안 함) · 평소보다 3분 넘게 걸리면 \'버스 지연 중\'' });
+  }
+  if (weather) out.push({ what: '날씨', by: `기상청 ${weather.source ?? '초단기예보'}`, at: null, note: `${weather.at} · ${weather.forTime} 예보${weather.advice?.length ? ` · ${weather.advice.join(', ')} (가정값)` : ''}` });
   return out;
 }

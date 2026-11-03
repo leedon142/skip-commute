@@ -1,5 +1,5 @@
 {
-  "source": "국민대학교 캠퍼스안내 > 통학버스 (https://www.kookmin.ac.kr/user/unIntr/campusGuide/bukakCampusGuide/index4.do), 2026-10-30 확인",
+  "source": "국민대학교 캠퍼스안내 > 통학버스 (https://www.kookmin.ac.kr/user/unIntr/campusGuide/bukakCampusGuide/index4.do), 2026-11-03 확인 (불광역 추가)",
   "days": "월~금",
   "note": "학교 공지 시간표 기준. 실시간 위치 정보는 없어서 학생들의 '탔어요·내렸어요' 기록으로 실제 출발·소요 시간을 보여줌. 방학·공휴일 운행은 학교 공지 확인",
   "stops": {
@@ -10,6 +10,16 @@
       "lng": 127.0245289,
       "posSource": "카카오 장소 검색 '길음역 4호선 3번출구'",
       "radiusM": 200
+    },
+    "bulgwang": {
+      "name": "불광역 2번 출구 통학버스 승차장",
+      "detail": "3호선 불광역 2번 출구 구기터널 방향 150미터 전방",
+      "lat": 37.60932031272748,
+      "lng": 126.93275488354172,
+      "posSource": "국민대 캠퍼스안내 통학버스 지도 좌표",
+      "radiusM": 200,
+      "rideFallbackMin": 17,
+      "rideFallbackBasis": "불광역→국민대는 도착 시각 공지가 없어 직선 5.5km × 1.3 ÷ 시속 25km로 계산한 가정값"
     },
     "kookmin": {
       "name": "국민대 정문 국민대학교앞 정류장",
@@ -29,6 +39,14 @@
     }
   },
   "lines": [
+    {
+      "id": "bulgwang",
+      "name": "불광역 셔틀",
+      "route": "불광역 → 국민대 (편도)",
+      "departures": [
+        { "from": "bulgwang", "to": "kookmin", "times": ["08:15", "08:25", "08:35"] }
+      ]
+    },
     {
       "id": "morning",
       "name": "오전셔틀",

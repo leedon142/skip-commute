@@ -6,6 +6,7 @@ import { fetchJsonAt, serviceKey } from './_lib.js';
 const BASE = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0';
 // 초단기: 1 비 2 비/눈 3 눈 5 빗방울 6 빗방울눈날림 7 눈날림 · 단기: 1 비 2 비/눈 3 눈 4 소나기
 const PTY = { 1: '비', 2: '비/눈', 3: '눈', 4: '소나기', 5: '빗방울', 6: '빗방울·눈날림', 7: '눈날림' };
+const NO_AMOUNT = ['강수없음', '적설없음', '0']; // 양이 없다는 뜻의 값들
 const ULTRA_MAX_MS = 5 * 3600e3; // 초단기예보가 확실히 덮는 범위 (발표 시각 + 6시간 중 앞쪽)
 const VILAGE_MAX_MS = 60 * 3600e3;
 // 단기예보 발표: 02·05·08·11·14·17·20·23시, 10분쯤부터 조회 가능
@@ -65,13 +66,31 @@ export async function weatherAt(pos, whenMs, now = Date.now()) {
   const v = Object.fromEntries(items.filter((i) => i.fcstDate + i.fcstTime === pick).map((i) => [i.category, i.fcstValue]));
   const rain = v.RN1 ?? v.PCP;
   const temp = v.T1H ?? v.TMP;
+  const amount = (x) => (x && !NO_AMOUNT.includes(x) ? x : null);
   return {
     precip: PTY[Number(v.PTY)] ?? null,
-    rainMm: rain && rain !== '강수없음' ? rain : null,
+    rainMm: amount(rain), // '1.0mm', '30.0~50.0mm', '1mm 미만' 같은 기상청 표기 그대로
+    snowCm: amount(v.SNO), // 적설은 단기예보에만 있음 ('1.0cm', '5.0cm 이상')
     tempC: temp != null ? Number(temp) : null,
     pop: v.POP != null ? Number(v.POP) : null,
     source: ultra ? '초단기예보' : '단기예보',
     at: `${base.date.slice(4, 6)}/${base.date.slice(6)} ${baseTime.slice(0, 2)}:${baseTime.slice(2)} 발표`,
     forTime: `${pick.slice(8, 10)}:${pick.slice(10)}`,
   };
+}
+
+// 폭염·한파 도보 보정. 기준 기온은 기상청 특보를 따름 (폭염주의보 33°C·경보 35°C: 일 최고 체감온도,
+// 한파주의보 -12°C·경보 -15°C: 아침 최저기온). 특보는 하루 단위 기준이라 시간별 예보 기온에 대는 건 근사이고,
+// 배율은 근거 있는 실측이 아니라 가정값 (걸음 측정이 쌓이면 실측으로 교체). 바람은 도보 시간에 반영하지 않음
+const HEAT = [[35, 1.1], [33, 1.05]]; // 기온(°C) 이상 → '폭염'
+const COLD = [[-15, 1.1], [-12, 1.05]]; // 기온(°C) 이하 → '한파'
+
+// → { mult: 도보 시간 배율, advice: ['폭염: 도보 ×1.10'] }  (예보가 없거나 폭염·한파가 아니면 1, [])
+export function extremeWalk(weather) {
+  const t = weather?.tempC;
+  if (t == null) return { mult: 1, advice: [] };
+  const heat = HEAT.find(([min]) => t >= min);
+  const cold = COLD.find(([max]) => t <= max);
+  const [name, hit] = heat ? ['폭염', heat] : cold ? ['한파', cold] : [null, null];
+  return hit ? { mult: hit[1], advice: [`${name}: 도보 ×${hit[1].toFixed(2)}`] } : { mult: 1, advice: [] };
 }
