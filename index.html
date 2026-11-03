@@ -2686,7 +2686,9 @@
       reason.textContent = '';
       routesBox.innerHTML = '';
       try {
-        const data = await fetchRecommend({ direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}) });
+        // 지금 위치에서 출발 (GPS가 없으면 등록한 집, 집 150m 안이면 집 기준)
+        const pos = await getPosition();
+        const data = await fetchRecommend({ direction: 'school', arriveBy: next.start.getTime(), ...(next.cls.room ? { room: next.cls.room } : {}), ...(pos ? { lat: pos.lat.toFixed(4), lng: pos.lng.toFixed(4) } : {}) });
         const [top] = data.routes;
         if (!top) throw new Error('경로를 찾지 못했어요');
         const leaveBy = new Date(top.leaveBy);
@@ -2697,7 +2699,7 @@
         const live = top.legs.some((l) => l.realtime);
         document.getElementById('am-reason-more').textContent = `${next.cls.start} ${next.cls.name}(${next.cls.room}) 시작 기준. 1순위 경로 ${Math.round(top.totalSec / 60)}분${data.building ? `(${data.building.name}까지)` : ''} + ${data.classBufferMin}분(${data.classBuffer?.basis ?? '여유'})으로 늦어도 ${hhmm(top.leaveBy)}에 나가야 하고, 준비 ${prep}분을 빼서 알람을 맞췄어요.`
           + (live ? ' 실시간 도착 정보가 반영됐어요.' : ' 출발이 가까워지면 실시간 도착 정보로 다시 계산돼요. 지금은 평소 배차·혼잡도 기준이에요.');
-        document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → ${data.to.name}`;
+        document.getElementById('am-routes-title').textContent = `${data.from.kind === 'gps' ? '현재 위치' : `${destLabel(data.from)}(집)`} → ${data.to.name}`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
         lastMorningDest = { name: data.to.name, lat: data.to.lat, lng: data.to.lng };
         routesBox.innerHTML = weatherBadges(data.weather, { light: true }) + renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
