@@ -168,10 +168,27 @@
     .report-opt.is-on[data-level="ok"] { background: #f1f5f9; border-color: #64748b; }
     .report-opt.is-on[data-level="mid"] { background: #fff6dc; border-color: #e8a000; }
     .report-opt.is-on[data-level="busy"] { background: #fdeaea; border-color: #e0484f; }
+    .wxr-opt.is-on { background: #eef4ff; border-color: #2f7de1; }
     .report-opt.is-on[data-level="ok"] i, .report-opt.is-on[data-level="ok"] span { color: #334155; }
     .report-opt.is-on[data-level="mid"] i, .report-opt.is-on[data-level="mid"] span { color: #9a6a00; }
     .report-opt.is-on[data-level="busy"] i, .report-opt.is-on[data-level="busy"] span { color: #b8262d; }
     .cm-section { color: #dbe6f1; font-size: 11px; font-weight: 800; padding: 10px 2px 4px; }
+    /* 날씨 배지: 강수·기온 (폭염·한파면 그렇게 적음). ⓘ를 누르면 도보 보정 설명 (짙은 패널 위 기본, 흰 카드 위는 .is-light) */
+    .wx-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 4px 2px; }
+    .wx-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 9999px; background: rgba(255,255,255,0.12); color: #fff; font-size: 11px; font-weight: 800; box-shadow: var(--sh-card); }
+    .wx-badge i { font-size: 14px; color: #8fd0ff; }
+    .wx-badge.wx-hot i { color: #ff9a8a; }
+    .wx-info { margin-left: auto; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9999px; color: #dbe6f1; font-size: 16px; }
+    .wx-detail { display: none; flex-basis: 100%; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.1); color: #eaf1f8; font-size: 11px; line-height: 1.5; }
+    .wx-detail.open { display: block; }
+    .wx-badges.is-light { padding: 0 0 8px; }
+    .wx-badges.is-light .wx-badge { background: #f1f5f9; color: #0f172a; }
+    .wx-badges.is-light .wx-badge i { color: #2f7de1; }
+    .wx-badges.is-light .wx-badge.wx-hot i { color: #e0484f; }
+    .wx-badges.is-light .wx-badge.wx-warn { background: #fff6dc; color: #9a6a00; }
+    .wx-badges.is-light .wx-badge.wx-warn i { color: #e8a000; }
+    .wx-badges.is-light .wx-info { color: #64748b; }
+    .wx-badges.is-light .wx-detail { background: #f1f5f9; color: #475569; }
     /* 짙은 패널 위 안내·오류·출처 글씨 */
     #rec-results > .p-3 { background: #fff; border-radius: 12px; }
     #rec-results > details, #rec-results > .px-3\.5 { color: #dbe6f1; }
@@ -759,12 +776,15 @@
 
           <!-- ================= TAB 4: QUEUE REPORTS (정류장 제보) ================= -->
           <div id="tab-pane-4" class="space-y-3 hidden">
-            
-            <!-- One-Touch Quick Report Box -->
-            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
-              <div class="font-extrabold text-[13px] text-slate-900 mb-1 flex items-center gap-1"><i class="ph-bold ph-megaphone-simple text-slate-500"></i> 지금 정류장 줄 상황</div>
-              <p class="text-[11px] text-slate-500 mb-3">한 번 누르면 다른 학생들 경로 판단에 보여줘요.</p>
-              <div class="flex items-center justify-between mb-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
+
+            <!-- 정류장 줄 상황: 제보 버튼 + 현장 피드 (/api/reports, 최근 2시간) -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-[13px] text-slate-900 flex items-center gap-1"><i class="ph-bold ph-megaphone-simple text-slate-500"></i> 정류장 줄 상황</span>
+                <button onclick="document.getElementById('report-help').classList.toggle('hidden')" class="text-slate-400 text-base" aria-label="설명"><i class="ph-bold ph-info"></i></button>
+              </div>
+              <div id="report-help" class="hidden p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed">한 번 누르면 다른 학생들의 경로 판단에 보여요. 15분 안의 제보는 그 정류장 버스의 못 탈 확률에 반영돼요 (보통 10% · 혼잡 40% 이상으로). 같은 정류장은 5분에 한 번만 제보할 수 있어요.</div>
+              <div class="flex items-center justify-between px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px]">
                 <span class="text-slate-500">제보 위치 <b id="report-stop" class="text-slate-800">확인 중…</b></span>
                 <button onclick="locateReportStop(true)" class="text-blue-600 font-bold flex items-center gap-0.5"><i class="ph-bold ph-crosshair"></i> 다시 찾기</button>
               </div>
@@ -772,33 +792,71 @@
                 <button onclick="selectReport(this); submitReport('ok')" data-level="ok" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-user text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">여유</span>
-                  <span class="text-[10px] text-slate-500">바로 타요</span>
                 </button>
                 <button onclick="selectReport(this); submitReport('mid')" data-level="mid" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-users text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">보통</span>
-                  <span class="text-[10px] text-slate-500">한 대 보내요</span>
                 </button>
                 <button onclick="selectReport(this); submitReport('busy')" data-level="busy" class="report-opt py-3 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
                   <i class="ph-bold ph-users-three text-xl text-slate-700"></i>
                   <span class="text-[13px] font-extrabold text-slate-900">혼잡</span>
-                  <span class="text-[10px] text-slate-500">줄이 길어요</span>
+                </button>
+              </div>
+              <div class="border-t border-slate-100 pt-3 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-slate-800">현장 피드</span>
+                  <button onclick="loadReportFeed()" class="text-[10px] text-slate-400"><span id="report-feed-updated">불러오는 중</span> · 새로고침</button>
+                </div>
+                <div id="report-feed-list" class="space-y-2"></div>
+                <button id="report-feed-more" onclick="toggleFeedMore()" class="hidden w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 tap-press">
+                  <span id="btn-load-more-text"></span>
+                  <i id="btn-load-more-icon" class="ph-bold ph-caret-down text-xs"></i>
                 </button>
               </div>
             </div>
 
-            <!-- 학우 제보 피드 (/api/reports, 최근 2시간) -->
-            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-2.5">
-              <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-slate-800">학우들의 실시간 현장 피드</span>
-                <button onclick="loadReportFeed()" class="text-[10px] text-slate-400"><span id="report-feed-updated">불러오는 중</span> · 새로고침</button>
+            <!-- 날씨: 예보 + 학우 제보 버튼 + 현장 피드 (/api/stop-info) -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-[13px] text-slate-900 flex items-center gap-1"><i class="ph-bold ph-cloud-sun text-slate-500"></i> 날씨</span>
+                <button onclick="document.getElementById('wx-help').classList.toggle('hidden')" class="text-slate-400 text-base" aria-label="설명"><i class="ph-bold ph-info"></i></button>
               </div>
-              <div class="text-[10px] text-slate-500">15분 안의 제보는 그 정류장 버스의 못 탈 확률에 반영돼요 (보통 10% · 혼잡 40% 이상으로).</div>
-              <div id="report-feed-list" class="space-y-2"></div>
-              <button id="report-feed-more" onclick="toggleFeedMore()" class="hidden w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 tap-press">
-                <span id="btn-load-more-text"></span>
-                <i id="btn-load-more-icon" class="ph-bold ph-caret-down text-xs"></i>
-              </button>
+              <div id="wx-help" class="hidden p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed">기상청 예보와 근처 학우 제보(15분 안·반경 2km에서 가장 많은 쪽)를 같이 보여줘요. 날씨 제보는 화면에만 쓰이고 길 찾기 계산에는 쓰지 않아요. 위치 권한이 없으면 국민대 정문 기준이에요.</div>
+              <div id="stopinfo-body"></div>
+              <div>
+                <div class="text-[12px] font-bold text-slate-800 mb-1.5">지금 여기 날씨는?</div>
+                <div class="grid grid-cols-3 gap-2">
+                  <button onclick="submitWeatherReport('clear')" data-wx="clear" class="wxr-opt py-2 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                    <i class="ph-bold ph-sun text-xl text-slate-700"></i><span class="text-[12px] font-extrabold text-slate-900">안 와요</span>
+                  </button>
+                  <button onclick="submitWeatherReport('rain')" data-wx="rain" class="wxr-opt py-2 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                    <i class="ph-bold ph-cloud-rain text-xl text-slate-700"></i><span class="text-[12px] font-extrabold text-slate-900">비 와요</span>
+                  </button>
+                  <button onclick="submitWeatherReport('snow')" data-wx="snow" class="wxr-opt py-2 px-1 rounded-xl bg-white border border-slate-200 hover:border-slate-400 flex flex-col items-center gap-1 tap-press">
+                    <i class="ph-bold ph-snowflake text-xl text-slate-700"></i><span class="text-[12px] font-extrabold text-slate-900">눈 와요</span>
+                  </button>
+                </div>
+              </div>
+              <div class="border-t border-slate-100 pt-3 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-slate-800">현장 피드</span>
+                  <button onclick="loadStopInfo(true)" class="text-[10px] text-slate-400"><span id="wxfeed-updated">불러오는 중</span> · 새로고침</button>
+                </div>
+                <div id="wxfeed-body" class="space-y-2 text-[12px]"></div>
+              </div>
+            </div>
+
+            <!-- 사고·통제: 서울시 실시간 돌발정보 (/api/stop-info). 학우 제보가 아니라 API 정보라 피드와 따로 -->
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-[13px] text-slate-900 flex items-center gap-1.5"><i class="ph-bold ph-warning text-slate-500"></i> 사고·통제 <span id="incident-count" class="hidden px-1.5 py-0.5 rounded-full text-[10px] font-extrabold"></span></span>
+                <span class="flex items-center gap-2">
+                  <button onclick="loadStopInfo(true)" class="text-slate-400 text-base" aria-label="새로고침"><i class="ph-bold ph-arrows-clockwise"></i></button>
+                  <button onclick="document.getElementById('incident-help').classList.toggle('hidden')" class="text-slate-400 text-base" aria-label="설명"><i class="ph-bold ph-info"></i></button>
+                </span>
+              </div>
+              <div id="incident-help" class="hidden p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed">서울시 실시간 돌발정보에서 반경 1.5km 안에 진행 중인 사고·고장·공사·행사를 보여줘요. 경로가 지나는 길에 있으면 '정체 가능'으로 알려주되 소요시간 계산에는 쓰지 않아요. 위치 권한이 없으면 국민대 정문 기준이에요.</div>
+              <div id="incident-body" class="space-y-2 text-[12px]"></div>
             </div>
 
           </div>
@@ -877,7 +935,7 @@
                 <input id="set-dismissalPush" type="checkbox" onchange="setAppSetting('dismissalPush', this.checked)" class="w-4 h-4 accent-blue-600">
               </label>
               <label class="flex items-center justify-between gap-2">
-                <span>길안내 중 돌발 상황 우회 안내<span class="block text-[10px] text-slate-400">타기 전: 탈 버스가 만차·5분 이상 지연·운행 종료이거나 혼잡 제보가 있으면 다른 추천 경로 안내 · 탄 뒤: 5분 넘게 늦어지면 더 빠른 경로 제안</span></span>
+                <span>길안내 중 돌발 상황 우회 안내<span class="block text-[10px] text-slate-400">타기 전: 탈 버스가 만차·5분 이상 지연·운행 종료이거나 혼잡 제보가 있으면 다른 추천 경로 안내 · 탄 뒤: 5분 넘게 늦어지면 더 빠른 경로 제안(이동 1회) · 길안내 바의 ↻ 버튼은 누를 때마다 지금 위치에서 다시 검색</span></span>
                 <input id="set-reroute" type="checkbox" onchange="setAppSetting('reroute', this.checked)" class="w-4 h-4 accent-blue-600">
               </label>
             </div>
@@ -895,6 +953,7 @@
               <div id="nav-label" class="font-extrabold truncate"></div>
             </div>
             <button id="nav-mute" onclick="toggleNavMute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="음성 켜기/끄기"></button>
+            <button id="nav-research" onclick="manualReroute()" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press" aria-label="지금 위치에서 경로 다시 검색" title="지금 위치에서 경로 다시 검색"><i class="ph-bold ph-arrows-clockwise"></i></button>
             <button onclick="advanceNav(true)" class="px-2 py-1 rounded-lg bg-white/15 font-bold tap-press">다음</button>
             <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-go-d)">종료</button>
           </div>
@@ -1258,7 +1317,7 @@
       }
       if (tabIndex === 1) { loadHomeBriefing(); loadExitStatus(); }
       if (tabIndex === 2) renderTimetable();
-      if (tabIndex === 4) { locateReportStop(); loadReportFeed(); }
+      if (tabIndex === 4) { locateReportStop(); loadReportFeed(); loadStopInfo(); }
       if (tabIndex === 3) {
         loadLiveBoard();
         if (!document.getElementById('rec-results').children.length) runRecommend();
@@ -1732,6 +1791,8 @@
             ${l.type === 'subway' && l.way ? `<div class="text-[10px] text-slate-500">${escapeHtml(l.way)} 방면</div>` : ''}
             ${live.length ? `<div class="text-[11px] text-slate-700">${live.join(' · ')}</div>` : ''}
             ${l.ended || l.lastVehicle || l.lastRisk ? `<div class="text-[11px] font-bold ${l.ended ? 'text-rose-600' : 'text-amber-600'}">${escapeHtml(l.notes.find((n) => /막차|운행/.test(n)) || '막차')}</div>` : ''}
+            ${l.delayMin ? `<div class="text-[11px] font-bold text-amber-700">지금 평소보다 ${l.delayMin}분 더 걸려요 (같은 차의 실시간 도착 기준)</div>` : ''}
+            ${l.traffic ? `<div class="text-[11px] text-amber-700"><b>${l.traffic.jam ? '정체 가능' : '근처 공사'}</b> ${l.traffic.incidents.map((i) => `${escapeHtml(i.label)} ${escapeHtml(i.text)} (${i.distM}m)`).join(' · ')}${l.traffic.total > l.traffic.incidents.length ? ` 외 ${l.traffic.total - l.traffic.incidents.length}건` : ''}</div>` : ''}
             <div class="text-[11px] text-slate-500">대기 ${Math.round(l.waitSec / 60)}분${l.realtime ? ' (실시간)' : l.timetable ? ' (시간표)' : ' (추정)'} · ${l.rideMin}분 탑승
               ${l.seatLikely === true ? ' · <span class="text-slate-700 font-bold">착석 가능</span>' : l.seatLikely === false ? ' · <span class="text-rose-600 font-bold">서서 감</span>' : ''}</div>
             ${next}
@@ -1807,12 +1868,31 @@
     const ALL_ENDED_NOTE = '<div class="m-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-700"><b>지금은 갈 수 있는 대중교통 경로가 없어요.</b> 아래 경로는 끊긴 노선이 섞여 있어 참고용이에요. 심야버스(N번)나 택시를 이용하거나, 첫차 시간에 다시 찾아 주세요.</div>';
     const allEnded = (routes) => routes.length > 0 && routes.every((r) => r.unavailable);
 
-    function weatherText(w) {
+    // 날씨 배지: 강수(없으면 '강수 없음', 있으면 비·눈 + 양)와 기온(폭염·한파면 그렇게 적고, 아니면 기온만).
+    // 도보 시간을 얼마나 늘렸는지는 ⓘ를 눌렀을 때만 보여줌 (배율은 가정값)
+    function weatherBadges(w, { light = false, info = true, extra = '' } = {}) {
       if (!w) return '';
-      const temp = w.tempC != null ? ` ${w.tempC}°C` : '';
-      // 폭염·한파·강풍 보정은 가정값이라 어떤 단계라서 얼마나 늘렸는지 같이 보여줌
-      const extra = w.advice?.length ? ` · ${w.advice.join(' · ')}` : '';
-      return w.precip ? `${w.precip} 예보${temp} · 도보 시간을 늘려 계산${extra}` : `강수 없음${temp}${extra}`;
+      const snowy = /눈/.test(w.precip ?? '');
+      const amount = (snowy && w.snowCm) || w.rainMm;
+      const precip = w.precip
+        ? `<span class="wx-badge"><i class="ph-bold ${snowy ? 'ph-cloud-snow' : 'ph-cloud-rain'}"></i>${escapeHtml(w.precip + (amount ? ` ${amount}` : ''))}</span>`
+        : '<span class="wx-badge"><i class="ph-bold ph-cloud-rain"></i>강수 없음</span>';
+      const [extreme] = (w.advice ?? []).map((a) => a.split(':')[0]);
+      const kind = extreme === '폭염' ? 'hot' : extreme === '한파' ? 'cold' : '';
+      const temp = w.tempC == null ? ''
+        : `<span class="wx-badge wx-${kind}"><i class="ph-bold ${{ hot: 'ph-thermometer-hot', cold: 'ph-thermometer-cold' }[kind] ?? 'ph-thermometer-simple'}"></i>${escapeHtml((extreme ? `${extreme} ` : '') + w.tempC)}°C</span>`;
+      // ⓘ 설명: 실제로 곱한 배율만 적음
+      const mults = [
+        w.precipMult > 1 ? `${w.precip} ×${w.precipMult.toFixed(2)}` : '',
+        ...(w.advice ?? []).map((a) => a.replace(': 도보 ', ' ')),
+      ].filter(Boolean);
+      const detail = (mults.length ? `도보 시간 보정(가정값): ${mults.join(' · ')}.` : '도보 시간 보정 없음.')
+        + (w.precip ? ' 비·눈이 오면 버스를 못 탈 확률도 10%p 올려요.' : '')
+        + ` 기상청 ${w.source ?? '예보'} ${w.forTime ?? ''} 기준.`;
+      return `<div class="wx-badges${light ? ' is-light' : ''}">${precip}${temp}${extra}`
+        + (info ? `<button onclick="this.parentElement.querySelector('.wx-detail').classList.toggle('open')" class="wx-info tap-press" aria-label="날씨 보정 설명"><i class="ph-bold ph-info"></i></button>`
+          + `<div class="wx-detail">${escapeHtml(detail)}</div>` : '')
+        + '</div>';
     }
 
     let lastRoutes = [];
@@ -1837,7 +1917,7 @@
                 <div class="flex items-center gap-1 flex-wrap">${chain}</div>
                 ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
                 ${first?.report && first.report.level !== 'ok' ? `<div class="text-[10px] font-bold ${first.report.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보 줄 ${escapeHtml(first.report.label)} · 못 탈 확률 ${Math.round(first.missProb * 100)}%</div>` : ''}
-                ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : /정체|지연/.test(t) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
               </div>
               <div class="text-right shrink-0">
                 <div><span class="cm-min">${Math.round(r.totalSec / 60)}</span><span class="text-[11px] font-bold text-slate-500">분</span></div>
@@ -1931,14 +2011,14 @@
       try {
         const data = await fetchRecommend(params);
         const origin = forceGate ? '정문 기준' : pos ? `GPS 기준 (오차 ${pos.accuracy}m)` : '정문 기준';
-        meta.innerHTML = `${escapeHtml(basis.label)} · ${origin} → ${escapeHtml(destLabel(data.destination))}`
-          + (data.weather ? `<br>${escapeHtml(weatherText(data.weather))}` : '')
+        // 기준 시각·도착지는 위 제목과 도착 칸에 이미 있어서 출발 위치 기준만 적음
+        meta.innerHTML = escapeHtml(origin)
           + (data.fallback ? `<br><span class="text-amber-700">${escapeHtml(data.fallback)}</span>` : '')
           + (pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, true)" class="underline">정문 기준으로 다시</button>` : '')
           + (!pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, false, true)" class="underline font-bold">내 위치로 찾기</button>` : '')
           + basisSwitch;
         lastDest = { name: destLabel(data.destination), lat: data.destination.lat, lng: data.destination.lng };
-        box.innerHTML = (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        box.innerHTML = weatherBadges(data.weather) + (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
       } catch (e) {
@@ -2620,7 +2700,7 @@
         document.getElementById('am-routes-title').textContent = `${destLabel(data.from)} → ${data.to.name}`;
         document.getElementById('am-routes-meta').textContent = `${hhmm(next.start.toISOString())} 도착 목표`;
         lastMorningDest = { name: data.to.name, lat: data.to.lat, lng: data.to.lng };
-        routesBox.innerHTML = renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
+        routesBox.innerHTML = weatherBadges(data.weather, { light: true }) + renderRoutes(data.routes, { morning: true, dest: data.to.name }) + sourcesBox(data);
       } catch (e) {
         alarm.textContent = hasHome() ? '계산 실패' : '집 미등록';
         reason.innerHTML = hasHome() ? escapeHtml(e.message) : `집을 등록하면 첫 수업에 맞춘 알람 시각을 계산해요.<br>${REGISTER_HOME_BUTTON}`;
@@ -2835,6 +2915,8 @@
         reportStop = null;
       }
       label.textContent = reportStop ? `${reportStop.name} (${reportStop.ars}) · ${reportStop.distM}m` : '300m 안에 정류장이 없어요';
+      // 위치를 방금 허용했으면 날씨·사고도 내 위치 기준으로 다시 불러옴 (처음엔 정문 기준)
+      if (ask) loadStopInfo(true);
       return reportStop;
     }
 
@@ -2868,6 +2950,129 @@
       }
     }
 
+    // ---------------- 주변 날씨·사고 (/api/stop-info) + 날씨 제보 ----------------
+    // 날씨는 기상청 예보와 학우 제보를 나란히 보여주고, 사고·통제는 서울시 돌발정보. 위치 권한이 없으면 정문 기준
+    const WEATHER_LABELS = { clear: '안 와요', rain: '비 와요', snow: '눈 와요' };
+    const INCIDENT_STYLE = { A01: 'bg-rose-100 text-rose-700', A02: 'bg-rose-100 text-rose-700', A04: 'bg-amber-100 text-amber-700' }; // 그 밖(행사 등)은 회색
+    const INCIDENT_SHOWN = 4;
+    let stopInfoAt = 0;
+
+    function untilText(ms) {
+      if (ms == null) return '종료 시각 미정';
+      const d = new Date(ms);
+      return d.toDateString() === new Date().toDateString() ? `${hhmm(d.toISOString())}까지` : `${d.getMonth() + 1}/${d.getDate()}까지`;
+    }
+
+    // 날씨 요약: 배지 한 줄(강수 · 기온 · 학우 제보 · 엇갈림 · 정문 기준). 자세한 설명은 카드의 ⓘ
+    function renderStopInfo(d, atGate) {
+      const report = d.weatherReport;
+      const mismatch = d.weather && report && !!d.weather.precip !== (report.value !== 'clear');
+      const extra = (report ? `<span class="wx-badge"><i class="ph-bold ph-users"></i>학우 ${escapeHtml(report.label)}${report.count > 1 ? ` ${report.count}건` : ''}</span>` : '')
+        + (mismatch ? '<span class="wx-badge wx-warn"><i class="ph-bold ph-warning"></i>예보와 달라요</span>' : '')
+        + (atGate ? '<span class="wx-badge"><i class="ph-bold ph-map-pin"></i>정문 기준</span>' : '');
+      return d.weather
+        ? weatherBadges(d.weather, { light: true, info: false, extra })
+        : `<div class="wx-badges is-light"><span class="wx-badge wx-warn"><i class="ph-bold ph-warning"></i>기상청 예보 없음</span>${extra}</div>`;
+    }
+
+    // 날씨 현장 피드: 근처 학우 날씨 제보 목록(2시간)
+    function renderWxFeed(d) {
+      const mine = new Set(myReportIds());
+      const ago = (at) => {
+        const m = Math.round((Date.now() - at) / 60000);
+        return m < 1 ? '방금 전' : `${m}분 전`;
+      };
+      const wxIcon = { clear: 'ph-sun', rain: 'ph-cloud-rain', snow: 'ph-snowflake' };
+      return d.weatherFeed?.length
+        ? `<ul class="space-y-1">${d.weatherFeed.map((r) => `
+            <li class="flex items-center gap-1.5">
+              <i class="ph-bold ${wxIcon[r.value] ?? 'ph-cloud'} text-slate-500"></i>
+              <b class="text-slate-800">${escapeHtml(r.label)}</b>
+              <span class="min-w-0 truncate text-slate-500">${escapeHtml(r.name)}</span>
+              <span class="ml-auto shrink-0 text-[10px] ${mine.has(r.id) ? 'text-blue-600 font-semibold' : 'text-slate-400'}">${ago(r.at)}</span>
+            </li>`).join('')}</ul>`
+        : '<div class="text-slate-500">최근 2시간 동안 제보가 없어요</div>';
+    }
+
+    // 사고·통제 카드: 서울시 돌발정보 목록. 없으면 눈에 띄게 '없어요', 있으면 머리글에 건수 (사고·고장이 있으면 붉게)
+    let wxIncidentsOpen = false;
+    function renderIncidents(d) {
+      const count = document.getElementById('incident-count');
+      const list = d.incidents;
+      count.classList.toggle('hidden', !list?.length);
+      if (list?.length) {
+        const urgent = list.some((i) => i.type === 'A01' || i.type === 'A02');
+        count.textContent = `${list.length}건`;
+        count.className = `px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${urgent ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`;
+      }
+      if (list == null) return `<div class="text-slate-500">${escapeHtml(d.incidentsError || '사고 정보를 못 불러왔어요')}</div>`;
+      if (!list.length) return `<div class="flex items-center gap-2 py-1 text-[13px] font-bold text-slate-700"><i class="ph-bold ph-check-circle text-xl text-emerald-600"></i>반경 ${d.radiusM / 1000}km 안에 진행 중인 사고·통제가 없어요</div>`;
+      const rest = list.length - INCIDENT_SHOWN;
+      return `<ul class="space-y-2">${list.map((i, k) => `
+          <li class="wx-inc flex gap-1.5 items-start ${k >= INCIDENT_SHOWN && !wxIncidentsOpen ? 'hidden' : ''}">
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${INCIDENT_STYLE[i.type] ?? 'bg-slate-100 text-slate-600'}">${escapeHtml(i.label)}</span>
+            <span class="min-w-0 text-slate-700">${escapeHtml(i.text)}<span class="block text-[10px] text-slate-400">${untilText(i.until)} · ${i.distM}m</span></span>
+          </li>`).join('')}</ul>${rest > 0 ? `<button onclick="toggleWxIncidents(this, ${list.length})" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] tap-press">${wxIncidentsOpen ? '접기' : `더보기 (${rest}건)`}</button>` : ''}`;
+    }
+
+    function toggleWxIncidents(btn, total) {
+      wxIncidentsOpen = !wxIncidentsOpen;
+      document.querySelectorAll('#incident-body .wx-inc').forEach((el, k) => el.classList.toggle('hidden', k >= INCIDENT_SHOWN && !wxIncidentsOpen));
+      btn.textContent = wxIncidentsOpen ? '접기' : `더보기 (${total - INCIDENT_SHOWN}건)`;
+    }
+
+    async function loadStopInfo(force = false) {
+      if (!force && Date.now() - stopInfoAt < 60e3) return;
+      stopInfoAt = Date.now();
+      const body = document.getElementById('stopinfo-body');
+      const feed = document.getElementById('wxfeed-body');
+      const incidents = document.getElementById('incident-body');
+      const stamps = [document.getElementById('wxfeed-updated')];
+      stamps.forEach((s) => { s.textContent = '불러오는 중'; });
+      const pos = await getPosition();
+      const at = pos || MAIN_GATE_POS;
+      try {
+        const res = await fetch(`/api/stop-info?lat=${at.lat}&lng=${at.lng}`);
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || res.statusText);
+        body.innerHTML = renderStopInfo(d, !pos);
+        feed.innerHTML = renderWxFeed(d);
+        incidents.innerHTML = renderIncidents(d);
+        stamps.forEach((s) => { s.textContent = `${new Date(d.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 기준`; });
+      } catch (e) {
+        stopInfoAt = 0;
+        const fail = `<div class="text-rose-700">불러오지 못했어요: ${escapeHtml(e.message)}</div>`;
+        body.innerHTML = fail;
+        feed.innerHTML = fail;
+        incidents.innerHTML = fail;
+        stamps.forEach((s) => { s.textContent = '실패'; });
+      }
+    }
+
+    async function submitWeatherReport(value) {
+      track('날씨제보');
+      const stop = await locateReportStop();
+      if (!stop) return triggerToast('정류장 근처에서만 제보할 수 있어요');
+      let last = {};
+      try { last = JSON.parse(localStorage.getItem('skip.lastWeatherReport')) || {}; } catch {}
+      const left = REPORT_COOLDOWN_MS - (Date.now() - (last[stop.ars] || 0));
+      if (left > 0) return triggerToast(`같은 정류장 날씨는 ${Math.ceil(left / 60000)}분 뒤에 다시 제보할 수 있어요`);
+      try {
+        const res = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'weather', ars: stop.ars, name: stop.name, value, lat: stop.lat, lng: stop.lng }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        last[stop.ars] = Date.now();
+        try { localStorage.setItem('skip.lastWeatherReport', JSON.stringify(last)); } catch {}
+        // 피드에서 '(내 제보)'로 알아볼 수 있게 줄 상황 제보와 같은 목록에 id를 저장
+        try { localStorage.setItem('skip.myReports', JSON.stringify([data.report.id, ...myReportIds()].slice(0, 30))); } catch {}
+        document.querySelectorAll('.wxr-opt').forEach((b) => b.classList.toggle('is-on', b.dataset.wx === value));
+        triggerToast(`'${WEATHER_LABELS[value]}' 날씨 제보를 공유했어요.`);
+        loadStopInfo(true);
+      } catch (e) {
+        triggerToast(`제보 실패: ${e.message}`);
+      }
+    }
+
     // 정류장별로 묶어서 최근 제보 순. 정류장을 누르면 그 정류장 제보 전체가 펼쳐짐
     async function loadReportFeed(mineId) {
       const box = document.getElementById('report-feed-list');
@@ -2881,7 +3086,8 @@
         }
         const mine = new Set(myReportIds());
         const groups = new Map();
-        for (const r of data.reports) {
+        // 날씨 제보는 위 '주변 날씨·사고' 카드에서 보여줌
+        for (const r of data.reports.filter((x) => x.kind !== 'weather')) {
           if (!groups.has(r.ars)) groups.set(r.ars, []);
           groups.get(r.ars).push(r);
         }
@@ -2895,19 +3101,19 @@
           const c = REPORT_COLOR[top.level];
           const counts = Object.keys(REPORT_LEVELS).map((k) => [k, list.filter((r) => r.level === k).length]).filter(([, n]) => n);
           return `
-            <details class="feed-group ${i >= FEED_SHOWN && !isFeedExpanded ? 'hidden' : ''} p-2.5 rounded-xl ${mine.has(top.id) ? 'bg-blue-50/80 border-blue-200' : 'bg-slate-50 border-slate-100'} border text-xs">
-              <summary class="cursor-pointer list-none">
-                <div class="flex items-center justify-between font-bold text-slate-800">
-                  <span class="flex items-center gap-1 text-${c}-700"><span class="w-1.5 h-1.5 rounded-full bg-${c}-500"></span> ${escapeHtml(top.name)}</span>
-                  <span class="text-[10px] font-normal ${mine.has(top.id) ? 'text-blue-600 font-semibold' : 'text-slate-400'}">${ago(top.at)}${mine.has(top.id) ? ' (내 제보)' : ''}</span>
-                </div>
-                <div class="mt-1 text-[11px] text-slate-600">지금 <b class="text-${c}-700">${REPORT_LEVELS[top.level]}</b> · 2시간 동안 ${counts.map(([k, n]) => `${REPORT_LEVELS[k]} ${n}`).join(' · ')}${fresh(top) && top.level !== 'ok' ? ' · <span class="text-blue-600">추천 반영 중</span>' : ''}</div>
+            <details class="feed-group ${i >= FEED_SHOWN && !isFeedExpanded ? 'hidden' : ''} px-2.5 py-2 rounded-xl ${mine.has(top.id) ? 'bg-blue-50/80 border-blue-200' : 'bg-slate-50 border-slate-100'} border text-xs">
+              <summary class="cursor-pointer list-none flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-${c}-500"></span>
+                <span class="flex-1 min-w-0 truncate text-[13px] font-bold text-slate-800">${escapeHtml(top.name)}</span>
+                <span class="text-[13px] font-extrabold text-${c}-700">${REPORT_LEVELS[top.level]}</span>
+                <span class="text-[10px] ${mine.has(top.id) ? 'text-blue-600 font-semibold' : 'text-slate-400'}">${ago(top.at)}</span>
               </summary>
-              <ul class="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
+              <div class="mt-1.5 text-[11px] text-slate-500">2시간 동안 ${counts.map(([k, n]) => `${REPORT_LEVELS[k]} ${n}`).join(' · ')}${fresh(top) && top.level !== 'ok' ? ' · <span class="text-blue-600">추천 반영 중</span>' : ''}</div>
+              <ul class="mt-1 space-y-0.5 text-[11px] text-slate-500">
                 ${list.map((r) => `<li>${ago(r.at)} · <span class="text-${REPORT_COLOR[r.level]}-700 font-bold">${REPORT_LEVELS[r.level]}</span>${mine.has(r.id) ? ' (내 제보)' : ''}</li>`).join('')}
               </ul>
             </details>`;
-        }).join('') : '<div class="p-2.5 text-[11px] text-slate-500">최근 2시간 동안 제보가 없어요. 정류장에서 첫 제보를 남겨 주세요.</div>';
+        }).join('') : '<div class="text-[12px] text-slate-500">최근 2시간 동안 제보가 없어요</div>';
         const more = document.getElementById('report-feed-more');
         more.classList.toggle('hidden', groups.size <= FEED_SHOWN);
         document.getElementById('btn-load-more-text').innerText = isFeedExpanded ? '접기' : `다른 정류장 제보 더보기 (${groups.size - FEED_SHOWN}곳)`;
@@ -3427,6 +3633,45 @@
         speak(say);
         renderNavBar(cur, null);
       } catch {}
+    }
+
+    // 길안내 바의 '다시 검색': 누를 때마다 지금 위치에서 새로 검색 (자동 재검색의 1회 제한과 따로, 눌러서 쓰는 만큼만 호출)
+    // 새 경로가 더 빠른지는 판단하지 않고 도착 시각을 둘 다 보여줘서 사용자가 고르게 함
+    let manualRerouting = false;
+    async function manualReroute() {
+      const nav = navState();
+      if (!nav || manualRerouting) return;
+      if (!nav.destPos) return triggerToast('도착지 좌표가 없는 안내라 다시 검색할 수 없어요.');
+      if (!navLastPos || Date.now() - navLastFix > NAV_GPS_STALE_MS) return triggerToast('지금 위치를 못 잡았어요. 잠시 뒤 다시 눌러 주세요.');
+      manualRerouting = true;
+      const btn = document.getElementById('nav-research');
+      btn.disabled = true;
+      btn.classList.add('opacity-60');
+      track('길안내-재검색-수동');
+      try {
+        const data = await fetchRecommend({
+          lat: navLastPos.lat, lng: navLastPos.lng,
+          homeLat: nav.destPos.lat.toFixed(4), homeLng: nav.destPos.lng.toFixed(4), homeName: nav.dest,
+        });
+        const cur = navState();
+        if (cur?.startedAt !== nav.startedAt) return;
+        const best = data.routes.find((r) => !r.unavailable);
+        const first = best?.legs.find((l) => l.type !== 'walk');
+        if (!first) return triggerToast('지금 위치에서 갈 수 있는 경로를 찾지 못했어요.');
+        cur.offer = {
+          at: Date.now(), route: best,
+          say: `다시 검색한 가장 빠른 경로: ${first.from}에서 ${rideName(first)} 타고 ${hhmm(best.arriveAt)} 도착 (처음 계획은 ${hhmm(new Date(cur.plannedArrive).toISOString())} 도착).`,
+        };
+        saveNav(cur);
+        speak(cur.offer.say);
+        renderNavBar(cur, null);
+      } catch (e) {
+        triggerToast(`다시 검색하지 못했어요: ${e.message}`);
+      } finally {
+        manualRerouting = false;
+        btn.disabled = false;
+        btn.classList.remove('opacity-60');
+      }
     }
 
     function acceptReroute() {
