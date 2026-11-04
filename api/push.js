@@ -7,8 +7,13 @@
 //        등교 알람(prepMin 있음)은 알람 1시간 전에 한 번 더 계산해서, 비·정체로 더 일찍 나가야 하면 알람을 앞당김 (checkId)
 //        cancel: 예전 예약 id 하나 또는 배열
 // POST /api/push { action: 'cancel', messageId }              → 예약 취소
+// POST /api/push { action: 'message', kind, query, plannedLeaveBy? } → { title, body, url, tag, leaveBy? }
+//        설치 앱이 휴대폰 안에서 직접 알람을 울릴 때 쓰는 알림 문구 (웹 푸시 발송과 같은 실시간 계산, 보내지는 않음)
+//        leaveBy: 등교 1순위 경로의 출발 시각(epoch ms) (앱이 알람 1시간 전에 알람을 앞당길지 정할 때 씀)
 import { json, HttpError } from './_lib.js';
 import { publicKey, canSchedule, checkSubscription, sendPush, schedule, cancel } from './_push.js';
+import { buildMessage, bestRoute } from './push-send.js';
+import { recommendFromQuery } from './recommend.js';
 
 const RECHECK_BEFORE_MS = 60 * 60_000; // 등교 알람 몇 분 전에 다시 계산할지
 
@@ -40,10 +45,7 @@ export async function POST(request) {
       const kind = body.kind === 'morning' ? 'morning' : 'dismissal';
       const at = Number(body.at);
       if (!(at > Date.now() - 60_000)) throw new HttpError(400, '보낼 시각이 지났어요');
-      const query = String(body.query || '').slice(0, 1500);
-      if (!new URLSearchParams(query).get('home') && !new URLSearchParams(query).get('homeLat')) {
-        throw new HttpError(400, '집이 등록돼야 알림을 예약할 수 있어요');
-      }
+      const query = checkQuery(body.query);
       await Promise.all([body.cancel].flat().map(cancel));
       const plannedLeaveBy = Number(body.plannedLeaveBy) || null;
       const messageId = await schedule(`${origin}/api/push-send`, { subscription, kind, at, query, plannedLeaveBy }, at);
@@ -58,12 +60,28 @@ export async function POST(request) {
       }
       return json({ messageId, checkId, at });
     }
+    if (body.action === 'message') {
+      const kind = body.kind === 'morning' ? 'morning' : 'dismissal';
+      const query = checkQuery(body.query);
+      // 계산이 실패해도 기본 문구는 돌려줌 (알람은 울려야 하니까)
+      const data = await recommendFromQuery(new URLSearchParams(query)).catch(() => ({ routes: [] }));
+      const message = await buildMessage({ kind, query, plannedLeaveBy: Number(body.plannedLeaveBy) || null }, data);
+      return json({ ...message, leaveBy: kind === 'morning' ? Date.parse(bestRoute(data)?.leaveBy) || null : null });
+    }
     if (body.action === 'cancel') {
       await cancel(body.messageId);
       return json({ cancelled: true });
     }
-    throw new HttpError(400, 'action은 test, schedule, cancel 중 하나예요');
+    throw new HttpError(400, 'action은 test, schedule, cancel, message 중 하나예요');
   } catch (e) {
     return json({ error: e.message }, e.status || 500);
   }
+}
+
+function checkQuery(raw) {
+  const query = String(raw || '').slice(0, 1500);
+  if (!new URLSearchParams(query).get('home') && !new URLSearchParams(query).get('homeLat')) {
+    throw new HttpError(400, '집이 등록돼야 알림을 예약할 수 있어요');
+  }
+  return query;
 }

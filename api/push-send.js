@@ -49,7 +49,7 @@ export async function buildMessage(job, data) {
   }
 }
 
-const bestRoute = (data) => data.routes.find((r) => !r.unavailable) ?? data.routes[0];
+export const bestRoute = (data) => data.routes.find((r) => !r.unavailable) ?? data.routes[0];
 
 // 등교 알람 1시간 전: 지금 날씨·교통으로 다시 계산 → 알람 시각이 3분 넘게 당겨지면 예약을 옮김
 // (늦춰지는 쪽은 그대로 둠: 지각 방지가 목적이라 일찍 깨우는 쪽만)
