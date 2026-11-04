@@ -39,6 +39,16 @@
             android:name=".NavigationService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- 등교 알람·하교 알림: 앱이 꺼져 있어도 예약한 시각에 울림. 재부팅·업데이트 뒤 예약 복구 -->
+        <receiver
+            android:name=".CommuteAlarms"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
@@ -50,4 +60,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 등교 알람을 정시에 (Android 13+는 알람 앱 권한, 12는 정확한 알람 권한) -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 </manifest>

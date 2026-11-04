@@ -1135,6 +1135,14 @@
         });
       }
       renderPushStatus();
+      if (NativeAlarm) {
+        NativeAlarm.alarmState().then((r) => { nativeAlarmOk = r.notifications; renderPushStatus(); }).catch(() => {});
+        // 등교 알람·하교 알림을 눌러서 앱이 열렸을 때 해당 화면으로
+        const openPending = () => NativeAlarm.takeOpen()
+          .then(({ url }) => { if (url) timetableReady.then(() => openFromUrl(url)); }).catch(() => {});
+        NativeAlarm.addListener('open', openPending);
+        openPending();
+      }
       if (pushState().enabled) timetableReady.then(() => setTimeout(loadMorning, 1500)); // 등교 알람 예약을 최신으로
     });
 
@@ -1544,6 +1552,9 @@
     // (서버는 예약 시각에 같은 조건으로 실시간 재계산해서 보냄). 아이폰은 '홈 화면에 추가'한 앱에서만 돼요.
     const PUSH_KEY = 'skip.push';
     const PUSH_BEFORE_END_MIN = 5;
+    // 설치 앱: 웹 푸시 대신 휴대폰 안의 알람으로 같은 시각에 예약 (문구는 울릴 때 서버가 실시간 계산, 등교는 1시간 전 재확인도 앱이 함)
+    const NativeAlarm = NATIVE ? window.Capacitor.Plugins.SkipNavigation : null;
+    let nativeAlarmOk = null; // 휴대폰 설정에서 알림을 허용했는지 (앱 시작 때 확인)
     function pushState() {
       try { return JSON.parse(localStorage.getItem(PUSH_KEY)) || { enabled: false, jobs: {} }; } catch { return { enabled: false, jobs: {} }; }
     }
@@ -1552,7 +1563,7 @@
     }
 
     function pushSupport() {
-      if (NATIVE) return '설치 앱 알림은 아직 준비 중이에요. 웹(skip-commute.vercel.app)에서는 켤 수 있어요.';
+      if (NATIVE) return null;
       if (!window.isSecureContext) return 'https 주소(배포본)에서만 알림을 쓸 수 있어요.';
       const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -1591,6 +1602,21 @@
     async function enablePush() {
       const unsupported = pushSupport();
       if (unsupported) return renderPushStatus(unsupported);
+      if (NativeAlarm) {
+        try {
+          const r = await NativeAlarm.alarmPermission();
+          nativeAlarmOk = r.notifications;
+          if (!r.notifications) return renderPushStatus('알림이 꺼져 있어요. 휴대폰 설정 → 애플리케이션 → SKIP → 알림에서 허용해 주세요.');
+          savePushState({ ...pushState(), enabled: true });
+          await NativeAlarm.testAlarm();
+          renderPushStatus('테스트 알림을 보냈어요. 알림을 눌러 하교 화면으로 이동하는지 확인해 보세요.');
+          loadHomeBriefing();
+          loadMorning();
+        } catch (e) {
+          renderPushStatus(`알림 켜기 실패: ${e.message}`);
+        }
+        return;
+      }
       try {
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') {
@@ -1613,6 +1639,10 @@
 
     async function sendTestPush() {
       try {
+        if (NativeAlarm) {
+          await NativeAlarm.testAlarm();
+          return renderPushStatus('테스트 알림을 보냈어요.');
+        }
         const sub = await pushSubscription();
         if (!sub) return enablePush();
         await pushApi({ action: 'test', subscription: sub.toJSON() });
@@ -1624,6 +1654,11 @@
 
     async function disablePush() {
       const st = pushState();
+      if (NativeAlarm) {
+        await Promise.all(['morning', 'dismissal'].map((kind) => NativeAlarm.cancelAlarm({ kind }).catch(() => {})));
+        savePushState({ enabled: false, jobs: {} });
+        return renderPushStatus('알림을 껐어요.');
+      }
       await Promise.all(Object.values(st.jobs || {}).flatMap((j) => [j.id, j.checkId]).filter(Boolean)
         .map((id) => pushApi({ action: 'cancel', messageId: id }).catch(() => {})));
       try { await (await pushSubscription())?.unsubscribe(); } catch {}
@@ -1661,7 +1696,8 @@
       const st = pushState();
       const job = st.jobs?.[kind];
       if (!job) return;
-      await pushApi({ action: 'cancel', messageId: job.id }).catch(() => {});
+      if (NativeAlarm) await NativeAlarm.cancelAlarm({ kind }).catch(() => {});
+      else await pushApi({ action: 'cancel', messageId: job.id }).catch(() => {});
       const jobs = { ...pushState().jobs };
       delete jobs[kind];
       savePushState({ ...pushState(), jobs });
@@ -1676,12 +1712,23 @@
       if (!appSettings()[kind === 'morning' ? 'morningPush' : 'dismissalPush']) return;
       const prev = st.jobs?.[kind];
       if (prev && Math.abs(prev.at - at) < 60_000 && prev.at > Date.now()) return;
+      // 예약에는 GPS 위치를 넣지 않음 (발송 시각엔 정문 기준으로 계산)
+      const query = recQuery(params);
+      query.delete('lat'); query.delete('lng');
+      if (NativeAlarm) {
+        try {
+          const api = document.querySelector('meta[name="skip-api-base"]').content.replace(/\/$/, '');
+          await NativeAlarm.scheduleAlarm({ kind, at: Math.round(at), query: query.toString(), plannedLeaveBy, ...(prepMin != null ? { prepMin } : {}), api });
+          savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at } } });
+          renderPushStatus();
+        } catch (e) {
+          renderPushStatus(`알람 예약 실패: ${e.message}`);
+        }
+        return;
+      }
       try {
         const sub = await pushSubscription();
         if (!sub) return;
-        // 예약에는 GPS 위치를 넣지 않음 (발송 시각엔 정문 기준으로 계산)
-        const query = recQuery(params);
-        query.delete('lat'); query.delete('lng');
         const r = await pushApi({ action: 'schedule', subscription: sub.toJSON(), kind, at, query: query.toString(), plannedLeaveBy, prepMin,
           cancel: [prev?.id, prev?.checkId].filter(Boolean) });
         savePushState({ ...pushState(), jobs: { ...pushState().jobs, [kind]: { at, id: r.messageId, checkId: r.checkId ?? null } } });
@@ -1695,7 +1742,8 @@
       const box = document.getElementById('push-status');
       if (!box) return;
       const st = pushState();
-      const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+      const perm = NATIVE ? (nativeAlarmOk === false ? 'denied' : 'granted')
+        : 'Notification' in window ? Notification.permission : 'unsupported';
       const on = st.enabled && perm === 'granted';
       document.getElementById('push-enable').classList.toggle('hidden', on);
       document.getElementById('push-controls').classList.toggle('hidden', !on);
