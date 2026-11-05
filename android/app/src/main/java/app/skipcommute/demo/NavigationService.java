@@ -350,18 +350,11 @@ public class NavigationService extends Service {
             .build();
     }
 
-    // 음악 줄이기(덕킹) 요청은 길안내로: 미디어끼리는 안드로이드가 음악을 줄여 주지 않음
-    private static AudioAttributes focusAttributes() {
-        return new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build();
-    }
-
     private void requestFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                .setAudioAttributes(focusAttributes())
+                .setAudioAttributes(speechAttributes()) // 재생과 같은 미디어로 요청해도 음악은 줄어듦 (에뮬레이터 확인)
+                .setWillPauseWhenDucked(false)
                 .build();
             audioManager.requestAudioFocus(focusRequest);
         } else {
