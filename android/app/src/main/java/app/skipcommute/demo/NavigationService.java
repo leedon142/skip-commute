@@ -57,6 +57,7 @@ public class NavigationService extends Service {
     static final String ACTION_STOP = "stop";
     static final String ACTION_SPEAK = "speak";
     static final String ACTION_MUTE = "mute";
+    static final String ACTION_REASON = "reason";
     static final String EXTRA_PAYLOAD = "payload";
     static final String EXTRA_TEXT = "text";
     static final String EXTRA_MUTED = "muted";
@@ -92,6 +93,8 @@ public class NavigationService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<JSONObject> steps = new ArrayList<>();
     private String dest = "";
+    /** AI가 이 경로를 고른 이유 (알림의 '이유 듣기'를 누르면 읽음) */
+    private String aiReason = "";
     private boolean muted;
     private LocationManager locationManager;
     private TextToSpeech tts;
@@ -171,6 +174,9 @@ public class NavigationService extends Service {
                 cancelWebSpeechFallback();
                 say(intent.getStringExtra(EXTRA_TEXT));
                 break;
+            case ACTION_REASON:
+                if (running && !aiReason.isEmpty()) say("AI 추천 이유예요. " + aiReason);
+                break;
             case ACTION_MUTE:
                 muted = intent.getBooleanExtra(EXTRA_MUTED, false);
                 if (muted && tts != null) tts.stop();
@@ -195,6 +201,7 @@ public class NavigationService extends Service {
             int idx = Math.min(p.optInt("idx", 0), steps.size() - 1);
             if (fresh) {
                 dest = p.optString("dest", "");
+                aiReason = p.optString("aiReason", "");
                 muted = p.optBoolean("muted", false);
                 apiBase = p.optString("api", apiBase);
                 api = apiBase;
@@ -219,7 +226,7 @@ public class NavigationService extends Service {
             JSONArray arr = new JSONArray();
             for (JSONObject s : steps) arr.put(s);
             p.put("steps", arr).put("idx", currentIdx).put("dest", dest).put("muted", muted)
-                .put("api", apiBase).put("alerted", new JSONArray(arriveAlerted));
+                .put("api", apiBase).put("aiReason", aiReason).put("alerted", new JSONArray(arriveAlerted));
             prefs().edit().putString("nav", p.toString()).apply();
         } catch (Exception ignored) {}
     }
@@ -532,11 +539,17 @@ public class NavigationService extends Service {
         Intent report = new Intent(this, ReportActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         PendingIntent reportPi = PendingIntent.getActivity(this, 3, report, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle(title)
             .setContentText(text)
-            .setContentIntent(openPi)
+            .setContentIntent(openPi);
+        // AI 추천 이유는 길어서 시작할 때 바로 읽지 않고, 듣고 싶을 때 누르게 함
+        if (!aiReason.isEmpty()) {
+            PendingIntent reasonPi = PendingIntent.getService(this, 4, intent(this, ACTION_REASON), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            b.addAction(0, "이유 듣기", reasonPi);
+        }
+        return b
             .addAction(0, "상황 제보", reportPi)
             .addAction(0, "길안내 종료", stopPi)
             .setOngoing(true)
