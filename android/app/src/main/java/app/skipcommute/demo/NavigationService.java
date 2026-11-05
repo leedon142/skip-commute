@@ -342,9 +342,10 @@ public class NavigationService extends Service {
         }
     }
 
+    // 미디어 소리로 재생: 길안내 음성(NAVIGATION_GUIDANCE)은 안드로이드 화면 녹화에 안 담겨서 시연 영상에 안 나옴
     private AudioAttributes speechAttributes() {
         return new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build();
     }
