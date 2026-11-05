@@ -73,7 +73,7 @@ function describe(r, i) {
     서서가는분: num(r.standingMin) ?? 0,
     첫차대기분: first?.waitSec != null ? Math.round(num(first.waitSec) / 60) : null,
     못탈확률: first?.missProb != null ? Math.round(num(first.missProb) * 100) + '%' : null,
-    학우줄제보: first?.report ? str(first.report.label ?? first.report, 10) : null,
+    학우줄제보: first?.report ? str(first.report.label ?? first.report, 10) + (first.report.queue ? ` (줄 약 ${first.report.queue.n}명)` : '') + (first.report.passed?.length ? ` (만차 통과: ${first.report.passed.join(', ')}번)` : '') : null,
     태그: (Array.isArray(r.tags) ? r.tags : []).slice(0, 6).map((t) => str(t, 20)),
   };
 }
@@ -133,14 +133,17 @@ export async function withAiPick(data, situations = []) {
 }
 
 const REPORT_SYSTEM = [
-  '국민대 학생이 통학길에서 보낸 상황 제보(글 또는 음성)를 정리해.',
-  `통학(버스·지하철·걷는 길·셔틀)에 영향을 주는 사고·정체·통제·공사·날씨 이야기면 relevant=true. 장난, 욕설, 광고, 상관없는 말, 알아들을 수 없는 소리는 relevant=false.`,
-  `type은 ${SITUATION_TYPES.join(', ')} 중 하나, affects는 ${SITUATION_AFFECTS.join(', ')} 중 하나.`,
-  'summary는 다른 학생에게 보여 줄 짧은 한국어 명사형 한 줄(25자 안, 예: "정릉 사거리 사고로 버스 정체"), 제보에 있는 내용만. 이름·전화번호 같은 개인정보는 빼.',
+  '국민대 학생이 통학길에서 보낸 제보(글 또는 음성)를 정리해.',
+  'category: 버스 정류장·셔틀 줄, 대기 인원, 버스가 만차로 지나감 같은 정류장 이야기면 "정류장". 사고·정체·통제·공사 같은 길 이야기면 "도로". 비·눈·강풍 같은 날씨면 "날씨". 통학과 상관없는 말이면 relevant=false.',
+  `type은 ${SITUATION_TYPES.join(', ')} 중 하나, affects는 ${SITUATION_AFFECTS.join(', ')} 중 하나 (정류장 이야기면 type "정체", affects "버스").`,
+  '정류장 이야기면: level은 줄이 여유/보통/혼잡 중 ok/mid/busy (모르면 인원으로 판단: 10명 안 ok, 25명 안 mid, 그 이상 busy, 둘 다 모르면 none). queue는 기다리는 사람 수 (말에 없으면 -1, "많다"처럼 숫자가 없으면 -1). route는 말한 버스 번호(없으면 빈 문자열), passed는 그 버스가 만차라 안 태우고 지나갔다는 말이 있으면 true.',
+  '정류장 이야기가 아니면 level은 "none", queue -1, route 빈 문자열, passed false.',
+  'summary는 다른 학생에게 보여 줄 짧은 한국어 명사형 한 줄(25자 안, 예: "정릉 사거리 사고로 버스 정체", "줄 30명쯤, 7211 만차 통과"), 제보에 있는 내용만. 이름·전화번호 같은 개인정보는 빼.',
   '음성이면 heard에 들은 말을 그대로 적어. 글이면 heard는 빈 문자열.',
 ].join('\n');
 
-// 학우 상황 제보 해석: { text } 또는 { audio: base64, mime } → { relevant, type, affects, summary, heard }
+// 학우 제보 해석: { text } 또는 { audio: base64, mime }
+//   → { relevant, category: 정류장|도로|날씨, type, affects, summary, heard, level, queue(없으면 null), route, passed }
 export async function parseSituation({ text, audio, mime }) {
   const parts = audio
     ? [{ inlineData: { mimeType: mime, data: audio } }, { text: '위 음성 제보를 정리해.' }]
@@ -149,15 +152,23 @@ export async function parseSituation({ text, audio, mime }) {
     type: 'OBJECT',
     properties: {
       relevant: { type: 'BOOLEAN' },
+      category: { type: 'STRING', enum: ['정류장', '도로', '날씨'] },
       type: { type: 'STRING', enum: SITUATION_TYPES },
       affects: { type: 'STRING', enum: SITUATION_AFFECTS },
+      level: { type: 'STRING', enum: ['ok', 'mid', 'busy', 'none'] },
+      queue: { type: 'INTEGER' },
+      route: { type: 'STRING' },
+      passed: { type: 'BOOLEAN' },
       summary: { type: 'STRING' },
       heard: { type: 'STRING' },
     },
-    required: ['relevant', 'type', 'affects', 'summary', 'heard'],
+    required: ['relevant', 'category', 'type', 'affects', 'level', 'queue', 'route', 'passed', 'summary', 'heard'],
   }, audio ? 12_000 : 6_000);
+  const queue = Number.isInteger(out.queue) && out.queue >= 0 ? Math.min(out.queue, 300) : null;
   return {
     relevant: out.relevant === true && SITUATION_TYPES.includes(out.type) && SITUATION_AFFECTS.includes(out.affects),
-    type: out.type, affects: out.affects, summary: str(out.summary, 40), heard: str(out.heard, 200),
+    category: out.category, type: out.type, affects: out.affects, summary: str(out.summary, 40), heard: str(out.heard, 200),
+    level: ['ok', 'mid', 'busy'].includes(out.level) ? out.level : queue == null ? 'mid' : queue < 10 ? 'ok' : queue < 25 ? 'mid' : 'busy',
+    queue, route: str(out.route, 10).replace(/번$/, ''), passed: out.passed === true,
   };
 }

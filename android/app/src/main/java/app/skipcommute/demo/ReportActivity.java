@@ -74,7 +74,7 @@ public class ReportActivity extends Activity {
         root.addView(title);
 
         TextView hint = new TextView(this);
-        hint.setText("사고·정체·통제·갑작스러운 비나 눈을 말하거나 적어 주세요. AI가 정리해서 근처 학우에게 공유해요.");
+        hint.setText("정류장 줄(몇 명쯤, 만차로 지나감)이나 사고·정체·갑작스러운 비나 눈을 말하거나 적어 주세요. AI가 정리해서 공유해요.");
         hint.setTextSize(12);
         hint.setTextColor(Color.rgb(100, 116, 139));
         hint.setPadding(0, dp(4), 0, dp(10));
@@ -87,7 +87,7 @@ public class ReportActivity extends Activity {
         root.addView(status);
 
         input = new EditText(this);
-        input.setHint("글로 적기 (예: 정문 앞 사고로 버스 안 움직여요)");
+        input.setHint("글로 적기 (예: 줄 30명쯤, 7211 만차 통과)");
         input.setTextSize(14);
         input.setOnFocusChangeListener((v, focused) -> { if (focused) stopRecording(); });
         root.addView(input);

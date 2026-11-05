@@ -349,16 +349,29 @@ async function busLeg(sp, atSec, now, arsOverride, ctx = {}) {
     leg.typicalBoarders = boardersPerBus;
   }
 
+  // 학우 줄 제보: 곧 탈 버스(20분 안)에만
+  const report = ars && ctx.reports && atSec + leg.waitSec <= REPORT_APPLY_SEC ? summarize(ctx.reports, ars, now) : null;
+  // 학우가 말한 대기 인원(AI가 제보에서 뽑은 숫자)이 있으면 평소 통계 대신 그 인원이 탄다고 봄
+  if (report?.queue) {
+    boardersPerBus = report.queue.n;
+    leg.reportedQueue = report.queue.n;
+    leg.notes.push(`학우 제보 줄 약 ${report.queue.n}명 (${report.queue.agoMin}분 전)`);
+  }
+
   // 못 탈 확률 → 기대 추가 대기
   let miss = leg.full ? 0.9 : MISS_PROB[leg.congestion]
     ?? (boardersPerBus != null && boardersPerBus > BUS_SEATS ? MISS_PROB_BUSY : MISS_PROB_QUIET);
   if (ctx.weather?.precip) miss = Math.min(0.9, miss + RAIN_MISS_ADD);
   if (leg.passengers != null && boardersPerBus != null && leg.passengers + boardersPerBus > BUS_CAPACITY) {
     miss = Math.max(miss, 0.5);
-    leg.notes.push(`평소 이 시간 한 대당 ${boardersPerBus}명 탑승 · 만차 위험`);
+    leg.notes.push(`${leg.reportedQueue != null ? '제보된 줄' : '평소 이 시간 한 대당'} ${boardersPerBus}명 탑승 · 만차 위험`);
   }
-  // 학우 줄 제보: 곧 탈 버스(20분 안)에만, 버스 혼잡도와 같은 기준(보통 10%·혼잡 40%)으로 못 탈 확률 하한
-  const report = ars && ctx.reports && atSec + leg.waitSec <= REPORT_APPLY_SEC ? summarize(ctx.reports, ars, now) : null;
+  // 학우가 이 노선이 만차로 지나갔다고 하면 다음 차도 못 탈 수 있다고 봄 (매우혼잡과 같은 70%)
+  if (report?.passed.includes(String(busNo))) {
+    miss = Math.max(miss, MISS_PROB.매우혼잡);
+    leg.notes.push(`학우 제보: ${busNo}번 만차로 통과 · 못 탈 확률 ${Math.round(MISS_PROB.매우혼잡 * 100)}% 반영`);
+  }
+  // 버스 혼잡도와 같은 기준(보통 10%·혼잡 40%)으로 못 탈 확률 하한
   if (report) {
     leg.report = report;
     const floor = MISS_PROB[report.label] ?? 0;
