@@ -8,13 +8,22 @@
 //   room=미래관6층11호실      등교: 첫 수업 강의실 (정문 → 건물 도보 계산)
 //   mode=fast|comfort
 //   walkFactor=1.2            내 걸음 속도 배율 (기기에서 잰 값, 0.5~2)
+// 엔진이 후보를 계산한 뒤 AI(Gemini)가 날씨·제보·환승 등을 보고 하나를 골라 맨 앞으로 올리고 이유를 붙임 (route.ai). 실패하면 엔진 순위 그대로
 import { handle, HttpError } from './_lib.js';
 import { recommend, MAIN_GATE } from './_engine.js';
+import { withAiPick } from './_agent.js';
+import { listReports, situationsNear } from './_reports.js';
 
 export const GET = handle(async (url) => recommendFromQuery(url.searchParams));
 
-// 쿼리 → 추천. 예약 알림(/api/push-send)도 발송 시각에 같은 조건으로 다시 계산할 때 사용
-export function recommendFromQuery(q) {
+// 쿼리 → 추천(+AI 판단). 예약 알림(/api/push-send)도 발송 시각에 같은 조건으로 다시 계산할 때 사용
+export async function recommendFromQuery(q) {
+  const data = await engineFromQuery(q);
+  const situations = data.from?.lat ? situationsNear(await listReports().catch(() => []), data.from) : [];
+  return withAiPick(data, situations);
+}
+
+function engineFromQuery(q) {
   const homeLat = Number(q.get('homeLat'));
   const homeLng = Number(q.get('homeLng'));
   const home = homeLat && homeLng

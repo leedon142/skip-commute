@@ -869,6 +869,17 @@
               </div>
               <div id="incident-help" class="hidden p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed">서울시 실시간 돌발정보에서 반경 1.5km 안에 진행 중인 사고·고장·공사·행사를 보여줘요. 경로가 지나는 길에 있으면 '정체 가능'으로 알려주되 소요시간 계산에는 쓰지 않아요. 위치 권한이 없으면 국민대 정문 기준이에요.</div>
               <div id="incident-body" class="space-y-2 text-[12px]"></div>
+              <!-- 학우 상황 제보: 글이나 말로 → AI(Gemini)가 사고·정체·날씨로 정리해서 공유 (/api/reports kind=situation) -->
+              <div class="border-t border-slate-100 pt-3 space-y-2">
+                <div class="text-[12px] font-bold text-slate-800">학우 상황 제보 <span class="text-[10px] font-normal text-slate-400">글이나 말로 보내면 AI가 정리해서 공유해요</span></div>
+                <div class="flex gap-1.5">
+                  <input id="sit-text" maxlength="200" placeholder="예: 정릉 사거리 사고로 버스 안 움직여요" onkeydown="if (event.key === 'Enter') submitSituation()" class="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-slate-200 text-[12px]">
+                  <button id="sit-mic" onclick="toggleSituationVoice()" class="px-3 rounded-xl bg-slate-100 text-slate-700 tap-press" aria-label="말로 제보"><i class="ph-bold ph-microphone"></i></button>
+                  <button onclick="submitSituation()" class="px-3 rounded-xl bg-blue-600 text-white text-[12px] font-bold tap-press">보내기</button>
+                </div>
+                <div id="sit-status" class="hidden text-[11px] text-slate-500"></div>
+                <div id="situation-body" class="space-y-1 text-[12px]"></div>
+              </div>
             </div>
 
           </div>
@@ -1984,7 +1995,9 @@
           <div class="cm-card px-3 py-2.5 ${r.unavailable ? 'opacity-50' : ''}">
             <div onclick="toggleRoute(this)" class="flex gap-2 cursor-pointer">
               <div class="flex-1 min-w-0 space-y-1">
+                ${r.ai ? `<div class="text-[10px] font-extrabold text-blue-600"><i class="ph-fill ph-sparkle"></i> AI 추천${r.ai.engineRank > 1 ? ` · 가장 빠른 길 대신` : ''}</div>` : ''}
                 <div class="flex items-center gap-1 flex-wrap">${chain}</div>
+                ${r.ai?.reason ? `<div class="text-[11px] text-slate-700">${escapeHtml(r.ai.reason)}</div>` : ''}
                 ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
                 ${first?.report && first.report.level !== 'ok' ? `<div class="text-[10px] font-bold ${first.report.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보 줄 ${escapeHtml(first.report.label)} · 못 탈 확률 ${Math.round(first.missProb * 100)}%</div>` : ''}
                 ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : /정체|지연/.test(t) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
@@ -3110,6 +3123,7 @@
         body.innerHTML = renderStopInfo(d, !pos);
         feed.innerHTML = renderWxFeed(d);
         incidents.innerHTML = renderIncidents(d);
+        document.getElementById('situation-body').innerHTML = renderSituations(d);
         stamps.forEach((s) => { s.textContent = `${new Date(d.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 기준`; });
       } catch (e) {
         stopInfoAt = 0;
@@ -3119,6 +3133,109 @@
         incidents.innerHTML = fail;
         stamps.forEach((s) => { s.textContent = '실패'; });
       }
+    }
+
+    // ---------------- 학우 상황 제보 (글·음성 → AI 정리) ----------------
+    const SITUATION_STYLE = { 사고: 'bg-rose-100 text-rose-700', 통제: 'bg-rose-100 text-rose-700', 정체: 'bg-amber-100 text-amber-700', 공사: 'bg-amber-100 text-amber-700' };
+
+    function renderSituations(d) {
+      const mine = new Set(myReportIds());
+      return d.situations?.length
+        ? `<ul class="space-y-1.5">${d.situations.map((s) => `
+            <li class="flex gap-1.5 items-start">
+              <span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${SITUATION_STYLE[s.type] ?? 'bg-slate-100 text-slate-600'}">${escapeHtml(s.type)}</span>
+              <span class="min-w-0 text-slate-700">${escapeHtml(s.summary)}<span class="block text-[10px] ${mine.has(s.id) ? 'text-blue-600 font-semibold' : 'text-slate-400'}">학우 제보 · ${s.agoMin < 1 ? '방금 전' : `${s.agoMin}분 전`} · ${s.distM}m${mine.has(s.id) ? ' · 내 제보' : ''}</span></span>
+            </li>`).join('')}</ul>`
+        : '<div class="text-slate-500">최근 30분 동안 근처 학우 제보가 없어요</div>';
+    }
+
+    function situationStatus(text) {
+      const el = document.getElementById('sit-status');
+      el.textContent = text || '';
+      el.classList.toggle('hidden', !text);
+    }
+
+    // audio: 16kHz 모노 WAV(base64). 없으면 입력 칸의 글
+    async function submitSituation(audio = null) {
+      const input = document.getElementById('sit-text');
+      const text = input.value.trim();
+      if (!audio && text.length < 2) return triggerToast('무슨 일이 있는지 적거나 마이크로 말해 주세요');
+      const pos = await getPosition({ ask: true });
+      if (!pos) return triggerToast('상황 제보는 위치가 필요해요. 위치 권한을 허용해 주세요');
+      track('상황제보');
+      situationStatus('AI가 제보를 정리하는 중…');
+      try {
+        const res = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'situation', ...(audio ? { audio } : { text }), lat: pos.lat, lng: pos.lng }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        try { localStorage.setItem('skip.myReports', JSON.stringify([data.report.id, ...myReportIds()].slice(0, 30))); } catch {}
+        input.value = '';
+        situationStatus('');
+        triggerToast(`'${data.report.type}: ${data.report.summary}'(으)로 공유했어요`);
+        loadStopInfo(true);
+      } catch (e) {
+        situationStatus(`제보 실패: ${e.message}`);
+      }
+    }
+
+    // 말로 제보: 녹음(최대 20초) → 16kHz 모노 WAV로 바꿔서 전송 (Gemini가 듣고 정리). 다시 누르면 녹음 끝
+    const SITUATION_MAX_REC_MS = 20_000;
+    let situationRec = null;
+    async function toggleSituationVoice() {
+      const btn = document.getElementById('sit-mic');
+      if (situationRec) return situationRec.stop();
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        return triggerToast('마이크 권한이 필요해요');
+      }
+      const chunks = [];
+      const rec = new MediaRecorder(stream);
+      situationRec = rec;
+      const timer = setTimeout(() => rec.state === 'recording' && rec.stop(), SITUATION_MAX_REC_MS);
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      rec.onstop = async () => {
+        clearTimeout(timer);
+        situationRec = null;
+        stream.getTracks().forEach((t) => t.stop());
+        btn.classList.remove('bg-rose-600', 'text-white');
+        situationStatus('녹음을 정리하는 중…');
+        try {
+          const wav = await toWav16k(new Blob(chunks, { type: rec.mimeType }));
+          await submitSituation(wav);
+        } catch (e) {
+          situationStatus(`녹음 실패: ${e.message}`);
+        }
+      };
+      rec.start();
+      btn.classList.add('bg-rose-600', 'text-white');
+      situationStatus('듣고 있어요… 다 말하면 마이크를 다시 눌러 주세요');
+    }
+
+    // 녹음 파일 → 16kHz 모노 16비트 WAV(base64). Gemini가 받는 형식 중 브라우저에서 만들 수 있는 것
+    async function toWav16k(blob) {
+      const ctx = new AudioContext();
+      const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+      ctx.close();
+      const rate = 16000;
+      const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+      const src = off.createBufferSource();
+      src.buffer = decoded;
+      src.connect(off.destination);
+      src.start();
+      const pcm = (await off.startRendering()).getChannelData(0);
+      const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+      const tag = (o, s) => [...s].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
+      tag(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE');
+      tag(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      tag(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+      pcm.forEach((v, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 0x7fff, true));
+      let bin = '';
+      const bytes = new Uint8Array(view.buffer);
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(bin);
     }
 
     async function submitWeatherReport(value) {
@@ -3159,7 +3276,7 @@
         const mine = new Set(myReportIds());
         const groups = new Map();
         // 날씨 제보는 위 '주변 날씨·사고' 카드에서 보여줌
-        for (const r of data.reports.filter((x) => x.kind !== 'weather')) {
+        for (const r of data.reports.filter((x) => !x.kind)) {
           if (!groups.has(r.ars)) groups.set(r.ars, []);
           groups.get(r.ars).push(r);
         }

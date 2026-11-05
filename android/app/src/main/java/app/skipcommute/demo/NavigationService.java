@@ -103,6 +103,7 @@ public class NavigationService extends Service {
     private Runnable webSpeechFallback;
     private boolean finishing;
     private String apiBase = "";
+    static volatile String api = ""; // 상황 제보 화면(ReportActivity)이 쓰는 API 주소
     private final Set<String> arriveAlerted = new HashSet<>();
     private final ExecutorService net = Executors.newSingleThreadExecutor();
     private long arriveNextAt;
@@ -196,6 +197,7 @@ public class NavigationService extends Service {
                 dest = p.optString("dest", "");
                 muted = p.optBoolean("muted", false);
                 apiBase = p.optString("api", apiBase);
+                api = apiBase;
                 JSONArray alerted = p.optJSONArray("alerted");
                 for (int i = 0; alerted != null && i < alerted.length(); i++) arriveAlerted.add(alerted.optString(i));
                 currentIdx = idx;
@@ -526,12 +528,16 @@ public class NavigationService extends Service {
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent openPi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stopPi = PendingIntent.getService(this, 1, intent(this, ACTION_STOP), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        // 잠금을 풀지 않고 바로 말로 제보 (ReportActivity는 잠금화면 위에 뜸)
+        Intent report = new Intent(this, ReportActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PendingIntent reportPi = PendingIntent.getActivity(this, 3, report, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(openPi)
+            .addAction(0, "상황 제보", reportPi)
             .addAction(0, "길안내 종료", stopPi)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

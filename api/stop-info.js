@@ -4,7 +4,7 @@
 import { handle, HttpError } from './_lib.js';
 import { nearbyIncidents } from './_incidents.js';
 import { weatherAt } from './_weather.js';
-import { listReports, summarizeWeather, weatherFeed } from './_reports.js';
+import { listReports, summarizeWeather, weatherFeed, situationsNear } from './_reports.js';
 
 export const INCIDENT_RADIUS_M = 1500;
 
@@ -26,5 +26,6 @@ export const GET = handle(async (url) => {
     weatherError: forecast.status === 'rejected' ? forecast.reason.message : null,
     weatherReport: reports.status === 'fulfilled' ? summarizeWeather(reports.value, pos, now) : null,
     weatherFeed: reports.status === 'fulfilled' ? weatherFeed(reports.value, pos, now) : [],
+    situations: reports.status === 'fulfilled' ? situationsNear(reports.value, pos, now) : [],
   };
 });
