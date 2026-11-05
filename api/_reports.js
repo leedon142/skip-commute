@@ -76,6 +76,37 @@ export function summarizeWeather(reports, pos, now = Date.now()) {
   return { value, label: WEATHER_VALUES[value], count: counts[value], total: fresh.length, agoMin: Math.round((now - latest.at) / 60000) };
 }
 
+// 상황 제보 (kind: 'situation'): 학우가 쓰거나 말한 사고·정체·통제·날씨를 AI(Gemini)가 정리한 것. 정류장이 아니라 제보한 자리 기준
+// 화면(사고·통제 카드)과 AI 경로 선택에만 쓰고, 엔진의 소요시간 계산에는 안 씀
+export const SITUATION_FRESH_MS = 30 * 60e3;
+const SITUATION_RADIUS_M = 2000;
+const SITUATION_COOLDOWN_SEC = 2 * 60;
+
+export async function addSituation({ type, affects, summary, lat, lng, client }, now = Date.now()) {
+  if (!isCoord(Number(lat), Number(lng))) throw new HttpError(400, '상황 제보는 위치(lat, lng)가 필요해요');
+  const report = { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, kind: 'situation', type, affects, summary, lat: Number(lat), lng: Number(lng), at: now };
+  const list = [report, ...(await listReports(now))].slice(0, MAX_REPORTS);
+  await cache.set('list', list, { ttl: KEEP_MS / 1000, name: 'reports' });
+  await cache.set(`cool:${situationWho(client)}`, 1, { ttl: SITUATION_COOLDOWN_SEC, name: 'report-cooldown' }).catch(() => {});
+  return report;
+}
+
+// AI를 부르기 전에 확인 (쿨타임 중이면 AI 호출도 안 함)
+export async function checkSituationCooldown(client) {
+  if (await cache.get(`cool:${situationWho(client)}`).catch(() => null)) {
+    throw new HttpError(429, `상황 제보는 ${SITUATION_COOLDOWN_SEC / 60}분에 한 번만 할 수 있어요`);
+  }
+}
+const situationWho = (client) => createHash('sha256').update(`${client}|situation`).digest('base64url').slice(0, 16);
+
+// pos 근처(2km)에서 30분 안의 상황 제보 (최신순)
+export function situationsNear(reports, pos, now = Date.now(), limit = 10) {
+  return reports
+    .filter((r) => r.kind === 'situation' && now - r.at < SITUATION_FRESH_MS && distM(pos, r) <= SITUATION_RADIUS_M)
+    .slice(0, limit)
+    .map((r) => ({ id: r.id, type: r.type, affects: r.affects, summary: r.summary, at: r.at, agoMin: Math.round((now - r.at) / 60000), distM: Math.round(distM(pos, r)) }));
+}
+
 // pos 근처(2km)에서 최근 2시간 날씨 제보 목록 (최신순) → 현장 피드용
 export function weatherFeed(reports, pos, now = Date.now(), limit = 30) {
   return reports

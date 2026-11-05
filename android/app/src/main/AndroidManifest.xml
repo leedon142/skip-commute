@@ -24,6 +24,17 @@
 
         </activity>
 
+        <!-- 잠금화면 안내 카드의 '상황 제보': 잠금 위에 바로 떠서 녹음 -->
+        <activity
+            android:name=".ReportActivity"
+            android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -60,6 +71,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 상황 제보를 말로 할 때 (웹뷰 녹음) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 등교 알람을 정시에 (Android 13+는 알람 앱 권한, 12는 정확한 알람 권한) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
