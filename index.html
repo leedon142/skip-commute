@@ -814,6 +814,17 @@
                   <span class="text-[13px] font-extrabold text-slate-900">혼잡</span>
                 </button>
               </div>
+              <!-- 추가 상황(선택): 글이나 말로 → AI(Gemini)가 정리. 줄 이야기면 이 정류장 제보(대기 인원·만차 통과)로, 사고·날씨면 아래 사고·통제 카드로 (/api/reports kind=situation) -->
+              <div class="space-y-1.5">
+                <div class="text-[12px] font-bold text-slate-800">추가 상황 <span class="text-[10px] font-normal text-slate-400">(선택) 글이나 말로 보내면 AI가 정리해요</span></div>
+                <div class="flex gap-1.5">
+                  <input id="sit-text" maxlength="200" placeholder="예: 줄 30명쯤, 7211 만차로 그냥 지나감" onkeydown="if (event.key === 'Enter') submitSituation()" class="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-slate-200 text-[12px]">
+                  <button id="sit-mic" onclick="toggleSituationVoice()" class="px-3 rounded-xl bg-slate-100 text-slate-700 tap-press" aria-label="말로 제보"><i class="ph-bold ph-microphone"></i></button>
+                  <button onclick="submitSituation()" class="px-3 rounded-xl bg-blue-600 text-white text-[12px] font-bold tap-press">보내기</button>
+                </div>
+                <div class="text-[10px] text-slate-400">줄 인원·만차 통과는 이 정류장 추천에, 사고·정체·갑작스러운 비나 눈은 아래 사고·통제 카드에 올라가요</div>
+                <div id="sit-status" class="hidden text-[11px] text-slate-500"></div>
+              </div>
               <div class="border-t border-slate-100 pt-3 space-y-2">
                 <div class="flex items-center justify-between text-xs">
                   <span class="font-bold text-slate-800">현장 피드</span>
@@ -869,15 +880,9 @@
               </div>
               <div id="incident-help" class="hidden p-2.5 rounded-xl bg-slate-50 text-[11px] text-slate-500 leading-relaxed">서울시 실시간 돌발정보에서 반경 1.5km 안에 진행 중인 사고·고장·공사·행사를 보여줘요. 경로가 지나는 길에 있으면 '정체 가능'으로 알려주되 소요시간 계산에는 쓰지 않아요. 위치 권한이 없으면 국민대 정문 기준이에요.</div>
               <div id="incident-body" class="space-y-2 text-[12px]"></div>
-              <!-- 학우 상황 제보: 글이나 말로 → AI(Gemini)가 사고·정체·날씨로 정리해서 공유 (/api/reports kind=situation) -->
+              <!-- 학우 상황 제보 목록 (위 정류장 카드의 '추가 상황'에서 도로·날씨 이야기로 들어온 것) -->
               <div class="border-t border-slate-100 pt-3 space-y-2">
-                <div class="text-[12px] font-bold text-slate-800">학우 상황 제보 <span class="text-[10px] font-normal text-slate-400">글이나 말로 보내면 AI가 정리해서 공유해요</span></div>
-                <div class="flex gap-1.5">
-                  <input id="sit-text" maxlength="200" placeholder="예: 정릉 사거리 사고로 버스 안 움직여요" onkeydown="if (event.key === 'Enter') submitSituation()" class="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-slate-200 text-[12px]">
-                  <button id="sit-mic" onclick="toggleSituationVoice()" class="px-3 rounded-xl bg-slate-100 text-slate-700 tap-press" aria-label="말로 제보"><i class="ph-bold ph-microphone"></i></button>
-                  <button onclick="submitSituation()" class="px-3 rounded-xl bg-blue-600 text-white text-[12px] font-bold tap-press">보내기</button>
-                </div>
-                <div id="sit-status" class="hidden text-[11px] text-slate-500"></div>
+                <div class="text-[12px] font-bold text-slate-800">학우 상황 제보 <span class="text-[10px] font-normal text-slate-400">AI가 정리한 근처 2km · 30분</span></div>
                 <div id="situation-body" class="space-y-1 text-[12px]"></div>
               </div>
             </div>
@@ -1545,7 +1550,7 @@
 
     async function fetchRecommend(params = {}) {
       if (!hasHome() && !params.homeLat) throw new Error('먼저 내 정보에서 집을 등록해 주세요.');
-      const qs = recQuery(params);
+      const qs = recQuery({ ai: '0', ...params });
       const key = `skip.rec:${qs}`;
       try {
         const hit = JSON.parse(sessionStorage.getItem(key) || 'null');
@@ -1998,6 +2003,7 @@
                 ${r.ai ? `<div class="text-[10px] font-extrabold text-blue-600"><i class="ph-fill ph-sparkle"></i> AI 추천${r.ai.engineRank > 1 ? ` · 가장 빠른 길 대신` : ''}</div>` : ''}
                 <div class="flex items-center gap-1 flex-wrap">${chain}</div>
                 ${r.ai?.reason ? `<div class="text-[11px] text-slate-700">${escapeHtml(r.ai.reason)}</div>` : ''}
+                ${r.ai?.checked?.length ? `<div class="text-[10px] text-slate-400">AI가 확인한 것: ${r.ai.checked.map(escapeHtml).join(' · ')}</div>` : ''}
                 ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
                 ${first?.report && first.report.level !== 'ok' ? `<div class="text-[10px] font-bold ${first.report.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보 줄 ${escapeHtml(first.report.label)} · 못 탈 확률 ${Math.round(first.missProb * 100)}%</div>` : ''}
                 ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : /정체|지연/.test(t) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
@@ -2101,9 +2107,13 @@
           + (!pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, false, true)" class="underline font-bold">내 위치로 찾기</button>` : '')
           + basisSwitch;
         lastDest = { name: destLabel(data.destination), lat: data.destination.lat, lng: data.destination.lng };
-        box.innerHTML = weatherBadges(data.weather) + (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        const draw = (d, aiNote = '') => {
+          box.innerHTML = weatherBadges(d.weather) + (allEnded(d.routes) ? ALL_ENDED_NOTE : '') + aiNote + renderRoutes(d.routes, { dest: destLabel(d.destination) }) + sourcesBox(d);
+        };
+        draw(data, aiWaiting(data));
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
+        refineWithAi(params, (d) => { draw(d); saveLastRec(d, destLabel(d.destination)); }, () => document.getElementById('ai-wait')?.remove());
       } catch (e) {
         meta.textContent = '';
         const last = loadLastRec();
@@ -2113,6 +2123,27 @@
           </div>
           ${last ? `<div class="px-3.5 pt-1 pb-2 text-[11px] text-slate-500">최근 조회 결과 (${new Date(last.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 기준, 실시간 아님) → ${escapeHtml(last.label)}</div>
             ${renderRoutes(last.data.routes, { dest: last.label })}` : ''}`;
+      }
+    }
+
+    // AI 판단: 엔진 결과를 먼저 그린 뒤, 같은 조건으로 AI 에이전트 결과(/api/recommend?ai=1)를 따로 받아 바꿔 그림
+    // (AI가 도구로 날씨·학우 제보·실시간 도착 등을 확인하느라 몇 초 걸림). 실패하면 엔진 결과 그대로
+    let aiSeq = 0;
+    function aiWaiting(data) {
+      return data.routes.filter((r) => !r.unavailable).length > 1
+        ? '<div id="ai-wait" class="cm-card px-3 py-2 text-[11px] text-slate-500"><i class="ph-fill ph-sparkle text-blue-600"></i> AI가 학우 제보·실시간 도착을 확인하고 있어요…</div>'
+        : '';
+    }
+    async function refineWithAi(params, onDone, onFail) {
+      const seq = ++aiSeq;
+      if (!document.getElementById('ai-wait')) return;
+      try {
+        const data = await fetchRecommend({ ...params, ai: '1' });
+        if (seq !== aiSeq) return;
+        if (data.ai) onDone(data);
+        else onFail();
+      } catch {
+        if (seq === aiSeq) onFail();
       }
     }
 
@@ -3163,16 +3194,24 @@
       const pos = await getPosition({ ask: true });
       if (!pos) return triggerToast('상황 제보는 위치가 필요해요. 위치 권한을 허용해 주세요');
       track('상황제보');
+      const stop = reportStop; // 줄 이야기면 이 정류장으로 (없으면 서버가 제보 위치에서 가장 가까운 정류장을 찾음)
       situationStatus('AI가 제보를 정리하는 중…');
       try {
-        const res = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'situation', ...(audio ? { audio } : { text }), lat: pos.lat, lng: pos.lng }) });
+        const res = await fetch('/api/reports', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'situation', ...(audio ? { audio } : { text }), lat: pos.lat, lng: pos.lng, ...(stop ? { ars: stop.ars, name: stop.name } : {}) }) });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || res.statusText);
         try { localStorage.setItem('skip.myReports', JSON.stringify([data.report.id, ...myReportIds()].slice(0, 30))); } catch {}
         input.value = '';
         situationStatus('');
-        triggerToast(`'${data.report.type}: ${data.report.summary}'(으)로 공유했어요`);
-        loadStopInfo(true);
+        if (data.report.kind === 'stop') {
+          // 줄 제보로 들어감 → 다음 추천에 바로 반영
+          try { sessionStorage.clear(); } catch {}
+          triggerToast(`${data.report.name} 줄 제보 '${REPORT_LEVELS[data.report.level]}' · ${data.report.summary}(으)로 공유했어요`);
+          loadReportFeed();
+        } else {
+          triggerToast(`'${data.report.type}: ${data.report.summary}'(으)로 공유했어요`);
+          loadStopInfo(true);
+        }
       } catch (e) {
         situationStatus(`제보 실패: ${e.message}`);
       }
@@ -3299,7 +3338,7 @@
               </summary>
               <div class="mt-1.5 text-[11px] text-slate-500">2시간 동안 ${counts.map(([k, n]) => `${REPORT_LEVELS[k]} ${n}`).join(' · ')}${fresh(top) && top.level !== 'ok' ? ' · <span class="text-blue-600">추천 반영 중</span>' : ''}</div>
               <ul class="mt-1 space-y-0.5 text-[11px] text-slate-500">
-                ${list.map((r) => `<li>${ago(r.at)} · <span class="text-${REPORT_COLOR[r.level]}-700 font-bold">${REPORT_LEVELS[r.level]}</span>${mine.has(r.id) ? ' (내 제보)' : ''}</li>`).join('')}
+                ${list.map((r) => `<li>${ago(r.at)} · <span class="text-${REPORT_COLOR[r.level]}-700 font-bold">${REPORT_LEVELS[r.level]}</span>${r.note ? ` · ${escapeHtml(r.note)}` : ''}${mine.has(r.id) ? ' (내 제보)' : ''}</li>`).join('')}
               </ul>
             </details>`;
         }).join('') : '<div class="text-[12px] text-slate-500">최근 2시간 동안 제보가 없어요</div>';

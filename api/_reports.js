@@ -26,7 +26,8 @@ export async function listReports(now = Date.now()) {
 const isCoord = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 
 // 줄 상황 제보: { ars, name, level }  ·  날씨 제보: { kind: 'weather', ars, name, value, lat, lng }
-export async function addReport({ ars, name, level, kind, value, lat, lng, client }, now = Date.now()) {
+// AI가 정리한 줄 제보는 extra { queue, route, passed, note } 가 붙고 쿨타임 없이 저장 (ai: true)
+export async function addReport({ ars, name, level, kind, value, lat, lng, client, extra, ai = false }, now = Date.now()) {
   const weather = kind === 'weather';
   if (!/^\d{5}$/.test(String(ars))) throw new HttpError(400, '정류장 번호(5자리)가 필요해요');
   if (weather ? !WEATHER_VALUES[value] : !LEVELS[level]) {
@@ -35,27 +36,32 @@ export async function addReport({ ars, name, level, kind, value, lat, lng, clien
   if (weather && !isCoord(Number(lat), Number(lng))) throw new HttpError(400, '날씨 제보는 위치(lat, lng)가 필요해요');
   // IP는 저장하지 않고 해시로만 쿨타임 확인 (줄 제보와 날씨 제보는 따로 셈)
   const who = createHash('sha256').update(`${client}|${ars}${weather ? '|weather' : ''}`).digest('base64url').slice(0, 16);
-  if (await cache.get(`cool:${who}`).catch(() => null)) {
+  if (!ai && await cache.get(`cool:${who}`).catch(() => null)) {
     throw new HttpError(429, `같은 정류장은 ${COOLDOWN_SEC / 60}분에 한 번만 제보할 수 있어요`);
   }
   const base = { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, ars: String(ars), name: String(name || ars).slice(0, 30), at: now };
-  const report = weather ? { ...base, kind, value, lat: Number(lat), lng: Number(lng) } : { ...base, level };
+  const report = weather ? { ...base, kind, value, lat: Number(lat), lng: Number(lng) } : { ...base, level, ...(extra ?? {}) };
   const list = [report, ...(await listReports(now))].slice(0, MAX_REPORTS);
   await cache.set('list', list, { ttl: KEEP_MS / 1000, name: 'reports' });
-  await cache.set(`cool:${who}`, 1, { ttl: COOLDOWN_SEC, name: 'report-cooldown' }).catch(() => {});
+  if (!ai) await cache.set(`cool:${who}`, 1, { ttl: COOLDOWN_SEC, name: 'report-cooldown' }).catch(() => {});
   return report;
 }
 
-// 한 정류장의 최근 제보 요약 → { level, count, total, agoMin } 또는 null
-// 가장 많이 나온 상태 (같으면 최근 것)
+// 한 정류장의 최근 제보 요약 → { level, count, total, agoMin, queue, passed } 또는 null
+// 가장 많이 나온 상태 (같으면 최근 것). queue: 가장 최근에 학우가 말한 대기 인원, passed: 만차로 지나갔다고 한 노선들
 export function summarize(reports, ars, now = Date.now()) {
-  const fresh = reports.filter((r) => r.kind !== 'weather' && r.ars === ars && now - r.at < REPORT_FRESH_MS);
+  const fresh = reports.filter((r) => !r.kind && r.ars === ars && now - r.at < REPORT_FRESH_MS);
   if (!fresh.length) return null;
   const counts = {};
   for (const r of fresh) counts[r.level] = (counts[r.level] ?? 0) + 1;
   const level = fresh.reduce((best, r) => (counts[r.level] > counts[best] ? r.level : best), fresh[0].level);
   const latest = fresh.find((r) => r.level === level);
-  return { level, label: LEVELS[level], count: counts[level], total: fresh.length, agoMin: Math.round((now - latest.at) / 60000) };
+  const counted = fresh.find((r) => r.queue != null);
+  return {
+    level, label: LEVELS[level], count: counts[level], total: fresh.length, agoMin: Math.round((now - latest.at) / 60000),
+    queue: counted ? { n: counted.queue, agoMin: Math.round((now - counted.at) / 60000) } : null,
+    passed: [...new Set(fresh.filter((r) => r.passed && r.route).map((r) => r.route))],
+  };
 }
 
 function distM(a, b) {
@@ -80,24 +86,14 @@ export function summarizeWeather(reports, pos, now = Date.now()) {
 // 화면(사고·통제 카드)과 AI 경로 선택에만 쓰고, 엔진의 소요시간 계산에는 안 씀
 export const SITUATION_FRESH_MS = 30 * 60e3;
 const SITUATION_RADIUS_M = 2000;
-const SITUATION_COOLDOWN_SEC = 2 * 60;
 
-export async function addSituation({ type, affects, summary, lat, lng, client }, now = Date.now()) {
+export async function addSituation({ type, affects, summary, lat, lng }, now = Date.now()) {
   if (!isCoord(Number(lat), Number(lng))) throw new HttpError(400, '상황 제보는 위치(lat, lng)가 필요해요');
   const report = { id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, kind: 'situation', type, affects, summary, lat: Number(lat), lng: Number(lng), at: now };
   const list = [report, ...(await listReports(now))].slice(0, MAX_REPORTS);
   await cache.set('list', list, { ttl: KEEP_MS / 1000, name: 'reports' });
-  await cache.set(`cool:${situationWho(client)}`, 1, { ttl: SITUATION_COOLDOWN_SEC, name: 'report-cooldown' }).catch(() => {});
   return report;
 }
-
-// AI를 부르기 전에 확인 (쿨타임 중이면 AI 호출도 안 함)
-export async function checkSituationCooldown(client) {
-  if (await cache.get(`cool:${situationWho(client)}`).catch(() => null)) {
-    throw new HttpError(429, `상황 제보는 ${SITUATION_COOLDOWN_SEC / 60}분에 한 번만 할 수 있어요`);
-  }
-}
-const situationWho = (client) => createHash('sha256').update(`${client}|situation`).digest('base64url').slice(0, 16);
 
 // pos 근처(2km)에서 30분 안의 상황 제보 (최신순)
 export function situationsNear(reports, pos, now = Date.now(), limit = 10) {
