@@ -986,6 +986,7 @@
             <button onclick="stopNavigation()" class="px-2 py-1 rounded-lg bg-white font-extrabold tap-press" style="color:var(--cm-go-d)">종료</button>
           </div>
           <div id="nav-say" class="mt-1 text-[11px] text-white leading-snug"></div>
+          <button id="nav-reason" onclick="speakAiReason()" class="hidden mt-1 px-2 py-1 rounded-lg bg-white/15 text-[11px] font-bold tap-press"><i class="ph-fill ph-sparkle"></i> AI 추천 이유 듣기</button>
           <div id="nav-offer" class="hidden mt-2 p-2.5 rounded-xl bg-white text-slate-900">
             <div id="nav-offer-text" class="font-bold leading-snug"></div>
             <div class="mt-2 grid grid-cols-2 gap-2">
@@ -3683,7 +3684,7 @@
       const steps = nativeSteps(nav);
       steps[nav.idx].say = firstSay;
       const api = document.querySelector('meta[name="skip-api-base"]').content.replace(/\/$/, '');
-      NativeNav.start({ steps, idx: nav.idx, dest: nav.dest, muted: navMuted(), api })
+      NativeNav.start({ steps, idx: nav.idx, dest: nav.dest, muted: navMuted(), api, aiReason: nav.aiReason || '' })
         .then((r) => { if (!r.location) triggerToast('위치 권한이 없어서 예상 시각으로만 안내해요.'); })
         .catch(() => speak(firstSay));
     }
@@ -3750,6 +3751,11 @@
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'ko-KR';
       speechSynthesis.speak(u);
+    }
+
+    function speakAiReason() {
+      const reason = navState()?.aiReason;
+      if (reason) speak(`AI 추천 이유예요. ${reason}`);
     }
 
     // 지하철역은 '역'을 붙여 읽기
@@ -3830,11 +3836,13 @@
         steps: buildNavSteps(r, dest), idx: 0, dest: dest.name, startedAt: Date.now(),
         plannedArrive: Date.parse(r.arriveAt), destPos: dest.lat ? { lat: dest.lat, lng: dest.lng } : null, rerouteUsed: false,
         alts: navAlternatives(r, morning ? lastMorningRoutes : lastRoutes),
+        // AI가 이 경로를 고른 이유: 길어서 바로 읽지 않고, 듣고 싶을 때 알림·화면의 '이유 듣기'로
+        aiReason: r.ai?.reason || '',
       };
       saveNav(nav);
       // 하교 첫 도보는 걸음 측정도 같이 (정류장 근처에서 자동 종료)
       if (!morning && r.legs[0]?.type === 'walk' && r.legs[0].to) startWalkTrip(i, true);
-      beginNav(nav, nav.steps[0].say);
+      beginNav(nav, nav.steps[0].say + (nav.aiReason ? ` AI가 이 길을 고른 이유가 있어요. 읽어드릴까요? 들으시려면 ${NativeNav ? '알림' : '화면'}에서 이유 듣기를 누르세요.` : ''));
       resumeNavigation();
       triggerToast(NativeNav ? '길안내를 시작했어요. 앱을 닫거나 화면을 꺼도 음성으로 알려 드려요.' : '길안내를 시작했어요. 화면을 켜 둔 채 걸어 주세요.');
     }
@@ -3861,6 +3869,7 @@
       bar.classList.remove('hidden');
       document.body.classList.add('nav-on');
       renderNavBar(nav, null);
+      document.getElementById('nav-reason').classList.toggle('hidden', !nav.aiReason);
       const rideIdx = nav.steps[nav.idx]?.subway ? nav.idx : nav.steps[nav.idx - 1]?.subway ? nav.idx - 1 : -1;
       if (rideIdx >= 0 && nav.steps[rideIdx].trainNo) trackSubway(rideIdx);
       // 안내 중엔 화면이 꺼지지 않게 (지원하는 브라우저만). 설치 앱은 서비스가 위치를 보므로 꺼져도 됨
@@ -3992,6 +4001,7 @@
       nav.idx = 0;
       nav.plannedArrive = Date.parse(nav.offer.route.arriveAt);
       nav.offer = null;
+      nav.aiReason = ''; // 바뀐 경로엔 AI 이유가 맞지 않음
       saveNav(nav);
       clearInterval(navTrainTimer);
       beginNav(nav, nav.steps[0].say);
