@@ -1550,7 +1550,7 @@
 
     async function fetchRecommend(params = {}) {
       if (!hasHome() && !params.homeLat) throw new Error('먼저 내 정보에서 집을 등록해 주세요.');
-      const qs = recQuery(params);
+      const qs = recQuery({ ai: '0', ...params });
       const key = `skip.rec:${qs}`;
       try {
         const hit = JSON.parse(sessionStorage.getItem(key) || 'null');
@@ -2003,6 +2003,7 @@
                 ${r.ai ? `<div class="text-[10px] font-extrabold text-blue-600"><i class="ph-fill ph-sparkle"></i> AI 추천${r.ai.engineRank > 1 ? ` · 가장 빠른 길 대신` : ''}</div>` : ''}
                 <div class="flex items-center gap-1 flex-wrap">${chain}</div>
                 ${r.ai?.reason ? `<div class="text-[11px] text-slate-700">${escapeHtml(r.ai.reason)}</div>` : ''}
+                ${r.ai?.checked?.length ? `<div class="text-[10px] text-slate-400">AI가 확인한 것: ${r.ai.checked.map(escapeHtml).join(' · ')}</div>` : ''}
                 ${first ? `<div class="text-[11px] text-slate-500 truncate">${first.realtime ? '<i class="ph-bold ph-wifi-high cm-live"></i> ' : ''}<b class="text-slate-700">${hhmm(first.departAt)}</b> ${escapeHtml(first.from)}에서${waitMin != null ? ` · ${waitMin}분 뒤` : ''}</div>` : ''}
                 ${first?.report && first.report.level !== 'ok' ? `<div class="text-[10px] font-bold ${first.report.level === 'busy' ? 'text-rose-700' : 'text-amber-700'}">학우 제보 줄 ${escapeHtml(first.report.label)} · 못 탈 확률 ${Math.round(first.missProb * 100)}%</div>` : ''}
                 ${r.tags.length ? `<div class="flex flex-wrap gap-1">${r.tags.map((t) => `<span class="px-1.5 py-0.5 rounded-full ${/막차|운행/.test(t) ? 'bg-rose-100 text-rose-700' : /정체|지연/.test(t) ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'} text-[10px] font-bold">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
@@ -2106,9 +2107,13 @@
           + (!pos && !forceGate ? ` · <button onclick="runRecommend(${useNow}, false, true)" class="underline font-bold">내 위치로 찾기</button>` : '')
           + basisSwitch;
         lastDest = { name: destLabel(data.destination), lat: data.destination.lat, lng: data.destination.lng };
-        box.innerHTML = weatherBadges(data.weather) + (allEnded(data.routes) ? ALL_ENDED_NOTE : '') + renderRoutes(data.routes, { dest: destLabel(data.destination) }) + sourcesBox(data);
+        const draw = (d, aiNote = '') => {
+          box.innerHTML = weatherBadges(d.weather) + (allEnded(d.routes) ? ALL_ENDED_NOTE : '') + aiNote + renderRoutes(d.routes, { dest: destLabel(d.destination) }) + sourcesBox(d);
+        };
+        draw(data, aiWaiting(data));
         saveLastRec(data, destLabel(data.destination));
         scheduleLiveRefresh(basis.at);
+        refineWithAi(params, (d) => { draw(d); saveLastRec(d, destLabel(d.destination)); }, () => document.getElementById('ai-wait')?.remove());
       } catch (e) {
         meta.textContent = '';
         const last = loadLastRec();
@@ -2118,6 +2123,27 @@
           </div>
           ${last ? `<div class="px-3.5 pt-1 pb-2 text-[11px] text-slate-500">최근 조회 결과 (${new Date(last.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 기준, 실시간 아님) → ${escapeHtml(last.label)}</div>
             ${renderRoutes(last.data.routes, { dest: last.label })}` : ''}`;
+      }
+    }
+
+    // AI 판단: 엔진 결과를 먼저 그린 뒤, 같은 조건으로 AI 에이전트 결과(/api/recommend?ai=1)를 따로 받아 바꿔 그림
+    // (AI가 도구로 날씨·학우 제보·실시간 도착 등을 확인하느라 몇 초 걸림). 실패하면 엔진 결과 그대로
+    let aiSeq = 0;
+    function aiWaiting(data) {
+      return data.routes.filter((r) => !r.unavailable).length > 1
+        ? '<div id="ai-wait" class="cm-card px-3 py-2 text-[11px] text-slate-500"><i class="ph-fill ph-sparkle text-blue-600"></i> AI가 학우 제보·실시간 도착을 확인하고 있어요…</div>'
+        : '';
+    }
+    async function refineWithAi(params, onDone, onFail) {
+      const seq = ++aiSeq;
+      if (!document.getElementById('ai-wait')) return;
+      try {
+        const data = await fetchRecommend({ ...params, ai: '1' });
+        if (seq !== aiSeq) return;
+        if (data.ai) onDone(data);
+        else onFail();
+      } catch {
+        if (seq === aiSeq) onFail();
       }
     }
 

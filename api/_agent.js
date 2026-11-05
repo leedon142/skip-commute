@@ -1,10 +1,12 @@
 // Gemini를 쓰는 두 가지
-// 1) AI 경로 선택: 엔진이 실제 데이터로 계산한 후보 중에서 '지금 이 사람에게 맞는 길' 하나를 고르고 이유를 말함
+// 1) AI 경로 판단 (에이전트): 엔진이 실제 데이터로 계산한 후보를 받고, 날씨·학우 제보·실시간 도착·엔진 상세·재검색 도구를 스스로 골라 확인한 뒤 하나를 고르고 이유를 말함
 //    AI는 후보 안에서만 고름 (버스·시간을 지어낼 수 없음). 가장 빠른 길보다 PICK_SLACK_MIN 넘게 늦거나 운행 끝난 길은 못 고름
-// 2) 상황 제보 해석: 학우가 쓰거나 말한 제보(사고·정체·통제·날씨)를 정해진 분류로 정리
+// 2) 제보 해석: 학우가 쓰거나 말한 제보를 정류장(줄·인원·만차 통과)/도로/날씨로 정리
 // 실패·한도 초과면 오류 → 화면은 AI 없이 동작 (경로는 엔진 순위 그대로)
 import { HttpError, requireEnv } from './_lib.js';
 import { sharedStore } from './_store.js';
+import { summarize, situationsNear } from './_reports.js';
+import { busStop } from './_transit.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
@@ -57,75 +59,230 @@ async function ask(system, parts, schema, timeoutMs = 6_000) {
 const str = (v, n = 30) => String(v ?? '').slice(0, n);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
-// 화면이 보낸 경로 → AI에게 보여줄 짧은 설명 (필요한 값만, 길이 제한)
+// ---------------- AI 경로 판단 (도구를 쓰는 에이전트) ----------------
+// 엔진이 실시간 데이터로 계산한 후보를 받고, Gemini가 필요한 도구(날씨·제보·실시간 도착·엔진 상세·다른 시각 재검색)를
+// 스스로 골라 불러 확인한 뒤 choose_route로 하나를 고름. 도구 호출은 MAX_TOOL_CALLS번, 재검색은 1번까지
+const MAX_TURNS = 4;
+const MAX_TOOL_CALLS = 4;
+
+const PICK_SYSTEM = [
+  '너는 국민대 학생의 통학길(하교 또는 등교)을 골라 주는 통학 에이전트야.',
+  '후보 경로는 엔진이 실시간 데이터로 계산한 것이다. 날씨·학우 제보·사고 같은 현장 상황은 처음엔 모르니, 판단에 필요한 것만 도구로 확인해.',
+  '예: 비 오면 덜 걷는 길이 낫다 → get_weather. 첫 버스 정류장 줄·만차 제보 → get_reports(정류장번호). 곧 올 버스가 혼잡한지 → get_arrivals. 못 탈 확률 근거 → estimate_route. 지금 후보가 다 나쁘면 → search_routes(몇 분 뒤 출발, 하교만).',
+  '필요한 도구는 한 번에 같이 불러(한 응답에 여러 개). 확인은 많아야 두 번에 끝내고, 같은 도구를 같은 값으로 두 번 부르지 마. 확인이 끝나면 반드시 choose_route를 불러 끝내.',
+  'choose_route의 pick은 고를수있는번호 중 하나. 후보에 없는 버스·시간·정보를 지어내지 마. 빠르기만 보지 말고 날씨, 못 탈 확률, 학우 제보, 사고, 환승, 서서 가는 시간, 사용자설정을 함께 따져.',
+  '가장 빠른 길이 아닌 걸 고르면 무엇을 얻는 대신 몇 분 늦는지 말해. 상황이 모든 후보에 똑같이 걸리면 피할 길이 없다는 것과 조심할 점만 말해.',
+  'reason은 이어폰으로 읽어 줄 한국어 1~2문장, 80자 안팎, 해요체. 확인한 사실과 후보의 숫자·이름만 쓰고, 후보 번호(0번, 1번)는 말하지 말고 버스 번호·노선 이름으로 말해.',
+].join('\n');
+
+const TOOLS = [{
+  functionDeclarations: [
+    { name: 'get_weather', description: '출발 시각의 기상청 날씨(강수, 기온, 폭염·한파 주의)', parameters: { type: 'OBJECT', properties: {} } },
+    {
+      name: 'get_reports',
+      description: '학우 제보. 정류장번호를 주면 그 정류장 줄(여유/보통/혼잡, 대기 인원, 만차로 지나간 노선, 메모), 안 주면 출발지 근처 2km의 사고·정체·날씨 상황 제보',
+      parameters: { type: 'OBJECT', properties: { ars: { type: 'STRING', description: '버스 정류장번호 5자리 (없으면 근처 상황 제보)' } } },
+    },
+    {
+      name: 'get_arrivals',
+      description: '서울시 버스 실시간 도착: 정류장에 곧 올 두 대의 남은 시간, 혼잡도, 차내 인원, 만차 여부',
+      parameters: { type: 'OBJECT', properties: { ars: { type: 'STRING' }, route: { type: 'STRING', description: '버스 번호' } }, required: ['ars', 'route'] },
+    },
+    {
+      name: 'estimate_route',
+      description: '엔진 계산 상세: 후보 하나의 구간별 대기·못 탈 확률·추가 대기·앉을 수 있는지와 그 근거',
+      parameters: { type: 'OBJECT', properties: { 번호: { type: 'INTEGER' } }, required: ['번호'] },
+    },
+    {
+      name: 'search_routes',
+      description: '같은 목적지로 몇 분 뒤 출발하면 어떤지 다시 계산 (한 번만). 결과는 참고용이고 고르는 건 지금 후보 중에서',
+      parameters: { type: 'OBJECT', properties: { minutesLater: { type: 'INTEGER', description: '5~60' } }, required: ['minutesLater'] },
+    },
+    {
+      name: 'choose_route',
+      description: '최종 선택. 확인이 끝나면 반드시 이걸로 끝냄',
+      parameters: { type: 'OBJECT', properties: { pick: { type: 'INTEGER' }, reason: { type: 'STRING' } }, required: ['pick', 'reason'] },
+    },
+  ],
+}];
+
+const rideName = (l) => (l.type === 'bus' ? `${str(l.route, 10)}번` : str(l.line, 15));
+const shortRoute = (r) => r.legs.filter((l) => l.type !== 'walk').map(rideName).join(' → ');
+
+// 엔진 경로 → AI에게 보여줄 짧은 설명 (현장 상황은 빼고, 도구로 확인하게 정류장번호를 넣음)
 function describe(r, i) {
   const legs = (Array.isArray(r.legs) ? r.legs : []).slice(0, 8);
   const rides = legs.filter((l) => l.type !== 'walk');
-  const walkMin = legs.filter((l) => l.type === 'walk').reduce((s, l) => s + (num(l.minutes) ?? 0), 0);
   const first = rides[0];
   return {
     번호: i,
     소요분: Math.round((num(r.totalSec) ?? 0) / 60),
     도착: str(r.arriveAt, 25),
-    경로: rides.map((l) => `${l.type === 'bus' ? `${str(l.route, 10)}번 버스` : str(l.line, 15)}(${str(l.from)}→${str(l.to)}, ${num(l.rideMin) ?? '?'}분)`).join(' → '),
+    경로: rides.map((l) => `${rideName(l)}(${str(l.from)}${l.ars ? ` 정류장번호 ${l.ars}` : ''} → ${str(l.to)}, ${num(l.rideMin) ?? '?'}분)`).join(' → '),
     환승: Math.max(0, rides.length - 1),
-    걷는분: walkMin,
+    걷는분: legs.filter((l) => l.type === 'walk').reduce((s, l) => s + (num(l.minutes) ?? 0), 0),
     서서가는분: num(r.standingMin) ?? 0,
     첫차대기분: first?.waitSec != null ? Math.round(num(first.waitSec) / 60) : null,
     못탈확률: first?.missProb != null ? Math.round(num(first.missProb) * 100) + '%' : null,
-    학우줄제보: first?.report ? str(first.report.label ?? first.report, 10) + (first.report.queue ? ` (줄 약 ${first.report.queue.n}명)` : '') + (first.report.passed?.length ? ` (만차 통과: ${first.report.passed.join(', ')}번)` : '') : null,
     태그: (Array.isArray(r.tags) ? r.tags : []).slice(0, 6).map((t) => str(t, 20)),
   };
 }
 
-const PICK_SYSTEM = [
-  '너는 국민대 학생의 통학길(하교 또는 등교)을 골라 주는 통학 도우미야.',
-  '후보 경로는 실시간 데이터로 계산된 것이고, 너는 그중 하나만 고른다. 후보에 없는 버스·시간·정보를 지어내지 마.',
-  '반드시 고를수있는번호 중에서 골라. 빠르기만 보지 말고 날씨(비·눈이면 덜 걷기), 못 탈 확률, 학우 줄 제보, 근처 학우 상황 제보(사고·정체·통제 등), 환승, 서서 가는 시간, 정체·막차 태그, 사용자설정을 함께 따져.',
-  '가장 빠른 길(소요분이 가장 작은 것)이 아닌 걸 고르면 무엇을 얻는 대신 몇 분 늦는지 말해.',
-  '상황 제보가 모든 후보에 똑같이 걸리면(예: 후보가 전부 같은 정류장에서 버스로 출발) 피할 길이 없다는 것과 조심할 점만 말하고, 그 길이 덜 막힌다고 지어내지 마. 앞뒤가 맞게 말해.',
-  'reason은 이어폰으로 읽어 줄 한국어 1~2문장, 70자 안팎, 해요체. 후보에 있는 숫자와 이름만 쓰고, 후보 번호(0번, 1번 같은 말)나 "설정에 따라" 같은 말은 쓰지 마. 버스 번호·노선 이름으로 말해.',
-].join('\n');
+// 도구 실행. ctx: { data, reports, rerun }. 반환 { result, label(화면에 보여줄 '확인한 것') }
+async function runTool(name, args, ctx, used) {
+  const { data } = ctx;
+  switch (name) {
+    case 'get_weather': {
+      const w = data.weather;
+      return { label: '날씨', result: w ? { 강수: w.precip || '없음', 비양: w.rainMm ?? null, 기온: w.tempC ?? null, 주의: w.advice ?? [], 기준: `기상청 ${w.forTime ?? ''}` } : { 오류: '날씨 정보 없음' } };
+    }
+    case 'get_reports': {
+      const ars = /^\d{5}$/.test(String(args.ars ?? '')) ? String(args.ars) : null;
+      if (ars) {
+        const sum = summarize(ctx.reports, ars);
+        const notes = ctx.reports.filter((r) => !r.kind && r.ars === ars && r.note).slice(0, 3).map((r) => r.note);
+        const stopName = data.routes.flatMap((r) => r.legs).find((l) => l.ars === ars)?.from ?? ars;
+        return {
+          label: `${stopName} 줄 제보`,
+          result: sum ? { 줄: sum.label, 제보수: sum.total, 몇분전: sum.agoMin, 대기인원: sum.queue?.n ?? null, 만차통과노선: sum.passed, 메모: notes } : { 제보: '최근 15분 제보 없음' },
+        };
+      }
+      const near = data.from?.lat ? situationsNear(ctx.reports, data.from) : [];
+      return { label: '근처 사고·날씨 제보', result: near.length ? near.map((s) => `${s.type}(${s.affects}) ${s.summary} · ${s.agoMin}분 전 · ${s.distM}m`) : { 제보: '최근 30분 근처 제보 없음' } };
+    }
+    case 'get_arrivals': {
+      const ars = String(args.ars ?? '');
+      if (!/^\d{5}$/.test(ars)) return { label: null, result: { 오류: '정류장번호(5자리)가 필요해요' } };
+      const stop = await busStop(ars);
+      const rt = stop.routes.find((x) => x.route === String(args.route ?? '').replace(/번$/, ''));
+      if (!rt) return { label: null, result: { 오류: `${args.route}번은 이 정류장에 없어요` } };
+      return {
+        label: `${rt.route}번 실시간 도착`,
+        result: rt.arrivals.filter(Boolean).map((a) => ({ 남은분: a.seconds != null ? Math.round(a.seconds / 60) : null, 안내: a.message, 혼잡: a.congestion, 차내인원: a.passengers, 만차: a.full })),
+      };
+    }
+    case 'estimate_route': {
+      const r = data.routes[num(args.번호)];
+      if (!r) return { label: null, result: { 오류: '없는 번호' } };
+      return {
+        label: `${shortRoute(r)} 계산 근거`,
+        result: r.legs.filter((l) => l.type !== 'walk').map((l) => ({
+          구간: `${rideName(l)} ${str(l.from)}→${str(l.to)}`,
+          대기분: l.waitSec != null ? Math.round(l.waitSec / 60) : null,
+          못탈확률: l.missProb != null ? Math.round(l.missProb * 100) + '%' : null,
+          추가대기분: l.extraWaitSec ? Math.round(l.extraWaitSec / 60) : 0,
+          앉을수있음: l.seatLikely,
+          근거: (l.notes ?? []).slice(0, 4),
+        })),
+      };
+    }
+    case 'search_routes': {
+      if (!ctx.rerun) return { label: null, result: { 오류: '등교는 다시 검색하지 않아요' } };
+      if (used.searched) return { label: null, result: { 오류: '다시 검색은 한 번만 할 수 있어요' } };
+      used.searched = true;
+      const later = Math.min(60, Math.max(5, num(args.minutesLater) ?? 10));
+      const again = await ctx.rerun(later);
+      return {
+        label: `${later}분 뒤 출발 다시 검색`,
+        result: again.routes.filter((r) => !r.unavailable).slice(0, 3).map((r) => ({ 경로: shortRoute(r), 소요분: Math.round(r.totalSec / 60), 도착: r.arriveAt })),
+      };
+    }
+    default:
+      return { label: null, result: { 오류: '없는 도구' } };
+  }
+}
 
-// routes: 엔진 결과(화면에서 받은 것), weather: 엔진 날씨, mode: fast|comfort, situations: 근처 학우 상황 제보
-async function pickRoute({ routes, weather, mode, situations = [] }) {
-  if (!Array.isArray(routes) || !routes.length) throw new HttpError(400, 'routes가 필요해요');
-  const list = routes.slice(0, MAX_ROUTES);
+// Gemini 한 번 호출 (도구 포함). 붐비면(503·429·시간 초과) 한 번 더: 첫 호출이면 가벼운 다른 모델로
+async function callWithTools(state, contents) {
+  const send = async (model) => {
+    await countCall();
+    return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': requireEnv('GEMINI_API_KEY') },
+      signal: AbortSignal.timeout(6_000),
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: PICK_SYSTEM }] }, contents, tools: state.tools, generationConfig: { temperature: 0.2 } }),
+    });
+  };
+  let res = await send(state.model).catch((e) => { if (e instanceof HttpError) throw e; return null; });
+  if (!res || res.status === 503 || res.status === 429) {
+    // 첫 호출이면 다른 모델로 바꿔서, 대화 중간이면 같은 모델로 한 번 더 (대화 기록이 모델에 묶여 있음)
+    if (state.first) state.model = FALLBACK_MODEL;
+    res = await send(state.model);
+  }
+  state.first = false;
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new HttpError(502, `AI 응답 오류 (${res.status}${out.error?.status ? ` ${out.error.status}` : ''})`);
+  const content = out.candidates?.[0]?.content;
+  if (!content?.parts?.length) throw new HttpError(502, 'AI 응답이 비어 있어요');
+  return content;
+}
+
+// ctx: { data(엔진 결과), reports(최근 제보), rerun(분 → 그만큼 뒤 출발로 엔진 재계산) }
+async function pickRoute(ctx) {
+  const { data } = ctx;
+  const list = data.routes.slice(0, MAX_ROUTES);
   const fastest = Math.min(...list.filter((r) => !r.unavailable).map((r) => num(r.totalSec) ?? Infinity));
   // 고를 수 있는 후보: 운행 중 + 가장 빠른 길보다 PICK_SLACK_MIN분 안
   const allowed = list.map((r, i) => i).filter((i) => !list[i].unavailable && num(list[i].totalSec) - fastest <= PICK_SLACK_MIN * 60);
   if (allowed.length < 2) return { pick: allowed[0] ?? 0, reason: null, ai: false };
 
   const situation = {
-    날씨: weather ? { 강수: weather.precip || '없음', 기온: weather.tempC ?? null, 주의: (weather.advice ?? []).slice(0, 3) } : '정보 없음',
-    사용자설정: mode === 'comfort' ? '편한 길 선호 (앉아서, 환승 적게)' : '빠른 길 선호',
-    근처학우상황제보: situations.length ? situations.map((s) => `${s.type}(${s.affects}) ${s.summary} · ${s.agoMin}분 전`) : '없음',
+    방향: data.direction === 'school' ? '등교' : '하교',
+    사용자설정: data.mode === 'comfort' ? '편한 길 선호 (앉아서, 환승 적게)' : '빠른 길 선호',
     고를수있는번호: allowed,
     후보: list.map(describe),
   };
-  const { out, model } = await ask(PICK_SYSTEM, [{ text: JSON.stringify(situation) }],
-    { type: 'OBJECT', properties: { pick: { type: 'INTEGER' }, reason: { type: 'STRING' } }, required: ['pick', 'reason'] });
-  // 범위 밖을 고르면 엔진 1등으로
-  if (!allowed.includes(out.pick)) return { pick: allowed[0], reason: null, ai: false };
-  return { pick: out.pick, reason: str(out.reason, 160) || null, ai: true, model };
+  const contents = [{ role: 'user', parts: [{ text: JSON.stringify(situation) }] }];
+  // 등교는 도착 시각이 정해져 있어 '몇 분 뒤 출발' 재검색이 없음 → 그 도구를 아예 안 보여 줌
+  const tools = ctx.rerun ? TOOLS : [{ functionDeclarations: TOOLS[0].functionDeclarations.filter((d) => d.name !== 'search_routes') }];
+  const state = { model: MODEL, first: true, tools };
+  const used = { searched: false };
+  const checked = [];
+  let toolCalls = 0;
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    const content = await callWithTools(state, contents);
+    contents.push(content); // 모델 응답 그대로 (Gemini 3의 thoughtSignature 유지)
+    const calls = content.parts.filter((p) => p.functionCall).map((p) => p.functionCall);
+    const choose = calls.find((c) => c.name === 'choose_route');
+    if (choose) {
+      const pick = num(choose.args?.pick);
+      if (!allowed.includes(pick)) return { pick: allowed[0], reason: null, ai: false };
+      return { pick, reason: str(choose.args?.reason, 160) || null, ai: true, model: state.model, checked };
+    }
+    if (!calls.length) break; // 도구도 선택도 없이 글만 쓰면 엔진 순위 그대로
+    const responses = [];
+    for (const call of calls) {
+      let out;
+      if (toolCalls >= MAX_TOOL_CALLS) out = { result: { 오류: '확인은 여기까지. 이제 choose_route로 골라' }, label: null };
+      else {
+        toolCalls++;
+        out = await runTool(call.name, call.args ?? {}, ctx, used).catch((e) => ({ result: { 오류: e.message }, label: null }));
+      }
+      if (out.label && !checked.includes(out.label)) checked.push(out.label);
+      responses.push({ functionResponse: { name: call.name, response: { result: out.result } } });
+    }
+    contents.push({ role: 'user', parts: responses });
+  }
+  return { pick: allowed[0], reason: null, ai: false };
 }
 
-// 추천 결과에 AI 판단을 입힘: AI가 고른 경로를 맨 앞으로 올리고 route.ai = { reason }.
-// 추천이 AI 때문에 늦어지지 않게 PICK_BUDGET_MS 안에 답이 없거나 실패하면 엔진 순위 그대로 (data.ai = null)
-const PICK_BUDGET_MS = 5_000;
-export async function withAiPick(data, situations = []) {
+// 추천 결과에 AI 판단을 입힘: AI가 고른 경로를 맨 앞으로 올리고 route.ai = { reason, checked(AI가 확인한 것) }.
+// 도구를 몇 번 오가면 몇 초 걸려서, 화면은 엔진 결과를 먼저 보여 주고 이걸 따로 받아 바꿔 그림 (/api/recommend?ai=1)
+// PICK_BUDGET_MS 안에 끝나지 않거나 실패하면 엔진 순위 그대로 (data.ai = null)
+const PICK_BUDGET_MS = 15_000;
+export async function withAiPick(data, { reports = [], rerun } = {}) {
   data.ai = null;
   if (!process.env.GEMINI_API_KEY || !data.routes?.length) return data;
   try {
     const out = await Promise.race([
-      pickRoute({ routes: data.routes, weather: data.weather, mode: data.mode, situations }),
+      pickRoute({ data, reports, rerun }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('AI 응답이 늦어요')), PICK_BUDGET_MS)),
     ]);
     if (!out.ai) return data;
     const [picked] = data.routes.splice(out.pick, 1);
-    picked.ai = { reason: out.reason, engineRank: out.pick + 1 };
+    picked.ai = { reason: out.reason, engineRank: out.pick + 1, checked: out.checked };
     data.routes.unshift(picked);
-    data.ai = { model: out.model, situations: situations.length };
+    data.ai = { model: out.model, checked: out.checked };
   } catch (e) {
     data.aiError = e.message;
   }
